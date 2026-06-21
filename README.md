@@ -1,4 +1,4 @@
-# Endtime HUD
+# Endtime (Todo TUI)
 
 A minimalist, keyboard-driven Task Manager for the terminal, designed with a strict "NASA Telemetry / Hacker" aesthetic. Built with Python and [Textual](https://textual.textualize.io/).
 
@@ -29,6 +29,17 @@ Start the HUD:
 ```bash
 python3 endtime.py
 ```
+
+### System Alias (Optional)
+To launch Endtime instantly from anywhere in your terminal just by typing `endtime`, add the following bash function to your `~/.bashrc` or `~/.zshrc`:
+
+```bash
+endtime() {
+    # Replace /path/to/endtime with the actual path to your cloned repository
+    (cd /path/to/endtime && ./venv/bin/python3 endtime.py)
+}
+```
+After adding it, restart your terminal or run `source ~/.bashrc` (or `~/.zshrc`), and you can now pull up the HUD instantly by typing `endtime`!
 
 ### Controls (Normal Mode)
 - `j` / `k`: Navigate tasks
