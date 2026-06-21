@@ -55,4 +55,4 @@ After adding it, restart your terminal or run `source ~/.bashrc` (or `~/.zshrc`)
 
 ## License
 
-[MIT](LICENSE).
+[MIT](LICENSE)
