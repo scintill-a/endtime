@@ -3,6 +3,7 @@
 A minimalist, keyboard-driven Task Manager for the terminal. Built with Python and [Textual](https://textual.textualize.io/).
 
 ## Features
+- **Daily Habit Tracker**: Prefix tasks with `[DAILY]` to create auto-resetting habits. Habits are pinned to the top of your list, automatically reset each day, track completion streaks with minimal UI indicators, and are protected from being swept.
 - **Vim-like Keybindings**: Seamlessly navigate your tasks without touching the mouse (`j`/`k` to navigate, `i` to insert, `e` to edit, `d` to delete).
 - **Dynamic Tagging System**: Prefix tasks with `[TAG]` (e.g. `[WORK] reply to emails`) and Endtime will automatically group and categorize them for you.
 - **Ultra-Minimal Aesthetic**: Strict terminal gray and stark `#ff4444` red highlights. No bloated borders, no unnecessary UI elements.
