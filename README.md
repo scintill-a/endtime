@@ -1,4 +1,4 @@
-# Endtime (Todo TUI)
+# endtime (Todo TUI)
 
 A minimalist, keyboard-driven Task Manager for the terminal. Built with Python and [Textual](https://textual.textualize.io/).
 
@@ -13,7 +13,7 @@ A minimalist, keyboard-driven Task Manager for the terminal. Built with Python a
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/scintill-a/Endtime.git
+   git clone https://github.com/scintill-a/endtime.git
    cd Endtime
    ```
 2. Create a virtual environment and install dependencies:
