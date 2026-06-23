@@ -163,10 +163,6 @@ class EndtimeApp(App):
                     t["completed"] = False
                     changed = True
 
-                if not t.get("focused", False):
-                    t["focused"] = True
-                    changed = True
-
                 streak = 0
                 check_date = date.today()
                 if today_str not in completed_dates:
@@ -396,11 +392,9 @@ class EndtimeApp(App):
                 if isinstance(item, TodoItem):
                     task_data = self.get_task_by_id(item.task_id)
                     if task_data:
-                        tag, _ = parse_task(task_data["text"])
-                        if tag != "DAILY":
-                            task_data["focused"] = not task_data.get("focused", False)
-                            self.save_tasks()
-                            self.refresh_list(keep_index=True)
+                        task_data["focused"] = not task_data.get("focused", False)
+                        self.save_tasks()
+                        self.refresh_list(keep_index=True)
 
     def action_delete_task(self):
         if self.mode == "NORMAL":
