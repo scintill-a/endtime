@@ -13,9 +13,9 @@ TASKS_DIR = Path.home() / ".config" / "endtime"
 TASKS_FILE = TASKS_DIR / "tasks.json"
 
 def parse_task(text):
-    match = re.match(r'^\[([A-Z0-9_-]+)\]\s*(.*)', text, re.IGNORECASE)
+    match = re.match(r'^\[([A-Z0-9_\-\s]+)\]\s*(.*)', text, re.IGNORECASE)
     if match:
-        return match.group(1).upper(), match.group(2)
+        return match.group(1).strip().upper(), match.group(2)
     return "GENERAL", text
 
 class CategoryItem(ListItem):
