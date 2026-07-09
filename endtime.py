@@ -2,7 +2,7 @@ import json
 import uuid
 import re
 from pathlib import Path
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
@@ -161,6 +161,8 @@ class EndtimeApp(App):
                 
                 if today_str not in completed_dates and t.get("completed", False):
                     t["completed"] = False
+                    if "completed_at" in t:
+                        del t["completed_at"]
                     changed = True
 
                 streak = 0
@@ -188,6 +190,7 @@ class EndtimeApp(App):
         
         pending = [t for t in self.tasks_data if not t.get("completed", False)]
         completed = [t for t in self.tasks_data if t.get("completed", False)]
+        completed.sort(key=lambda t: (parse_task(t["text"])[0] == "DAILY", t.get("completed_at", "")), reverse=True)
         
         groups = {}
         for t in pending:
@@ -369,6 +372,11 @@ class EndtimeApp(App):
                     task_data = self.get_task_by_id(item.task_id)
                     if task_data:
                         task_data["completed"] = not task_data["completed"]
+                        if task_data["completed"]:
+                            task_data["completed_at"] = datetime.now().isoformat()
+                        else:
+                            if "completed_at" in task_data:
+                                del task_data["completed_at"]
                         tag, _ = parse_task(task_data["text"])
                         if tag == "DAILY":
                             today_str = date.today().isoformat()
