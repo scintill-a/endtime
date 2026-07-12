@@ -40,6 +40,7 @@ class EndtimeApp(App):
         Binding("n", "confirm_no", "No", show=False),
         Binding("escape", "normal_mode", "Normal", show=False),
         Binding("q", "quit", "Quit", show=False),
+        Binding("r", "reset_task", "Reset", show=False),
     ]
 
     def __init__(self):
@@ -52,6 +53,7 @@ class EndtimeApp(App):
         self.session_target_id = None
         self.editing_id = None
         self.pending_delete_id = None
+        self.pending_reset_id = None
         self.previous_highlighted = None
         self.show_help = False
 
@@ -363,7 +365,7 @@ class EndtimeApp(App):
                             
                         self.schedule_save(tasks=True)
                         self.refresh_list(keep_index=True)
-        elif self.mode in ("CONFIRM_DELETE", "CONFIRM_SWEEP"):
+        elif self.mode in ("CONFIRM_DELETE", "CONFIRM_SWEEP", "CONFIRM_RESET"):
             self.action_confirm_yes()
 
     def action_toggle_collapse(self):
@@ -415,6 +417,17 @@ class EndtimeApp(App):
                     self.update_prompt("[#ff4444]DELETE TASK? (y/n)[/]")
                     self.update_header()
 
+    def action_reset_task(self):
+        if self.mode == "NORMAL":
+            task_list = self.query_one("#task-list", ListView)
+            if task_list.index is not None and task_list.children:
+                item = task_list.children[task_list.index]
+                if isinstance(item, TodoItem):
+                    self.mode = "CONFIRM_RESET"
+                    self.pending_reset_id = item.task_id
+                    self.update_prompt("[#ff4444]RESET TIMER? (y/n)[/]")
+                    self.update_header()
+
     def action_sweep_cleared(self):
         if self.mode == "NORMAL":
             completed = [t for t in self.tasks_data if t.get("completed", False)]
@@ -438,9 +451,17 @@ class EndtimeApp(App):
             self.save_tasks()
             self.refresh_list(keep_index=True)
             self.action_normal_mode()
+        elif self.mode == "CONFIRM_RESET" and self.pending_reset_id:
+            for t in self.tasks_data:
+                if t["id"] == self.pending_reset_id:
+                    t["time_spent_seconds"] = 0
+                    break
+            self.save_tasks()
+            self.refresh_list(keep_index=True)
+            self.action_normal_mode()
 
     def action_confirm_no(self):
-        if self.mode in ("CONFIRM_DELETE", "CONFIRM_SWEEP"):
+        if self.mode in ("CONFIRM_DELETE", "CONFIRM_SWEEP", "CONFIRM_RESET"):
             self.action_normal_mode()
 
     def action_edit_task(self):
