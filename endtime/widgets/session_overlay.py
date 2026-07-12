@@ -21,7 +21,7 @@ class SessionOverlayModal(ModalScreen[Optional[str]]):
         height: auto;
         align: center middle;
         padding: 1 2;
-        border: solid #ff4444;
+        border: solid #333333;
         background: #080808;
     }
 
@@ -189,11 +189,11 @@ class SessionOverlayModal(ModalScreen[Optional[str]]):
                 event.prevent_default()
                 return
 
-        if event.character in ("l", "j") or event.key in ("right", "down", "tab"):
+        if event.key in ("right", "down", "tab"):
             self.selected_action = (self.selected_action + 1) % 4
             self._refresh_hints()
             event.prevent_default()
-        elif event.character in ("h", "k") or event.key in ("left", "up"):
+        elif event.key in ("left", "up"):
             self.selected_action = (self.selected_action - 1) % 4
             self._refresh_hints()
             event.prevent_default()

@@ -18,7 +18,7 @@ class SessionPickerModal(ModalScreen[Optional[str]]):
         width: 38;
         height: auto;
         background: #080808;
-        border: solid #ff4444;
+        border: solid #333333;
         padding: 1 2;
     }
 
@@ -90,11 +90,11 @@ class SessionPickerModal(ModalScreen[Optional[str]]):
             pass
 
     def on_key(self, event) -> None:
-        if event.character == "j" or event.key == "down":
+        if event.key == "down":
             self.selected_index = (self.selected_index + 1) % len(self.options)
             self._refresh_options()
             event.prevent_default()
-        elif event.character == "k" or event.key == "up":
+        elif event.key == "up":
             self.selected_index = (self.selected_index - 1) % len(self.options)
             self._refresh_options()
             event.prevent_default()
