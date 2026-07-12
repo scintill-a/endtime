@@ -69,7 +69,16 @@ class EndtimeApp(App):
         self.action_normal_mode()
 
     def update_header(self):
-        header = self.query_one("#header", Label)
+        header = None
+        for screen in getattr(self, "screen_stack", [self.screen]):
+            try:
+                header = screen.query_one("#header", Label)
+                break
+            except Exception:
+                continue
+        if not header:
+            return
+
         total = len(self.tasks_data)
         completed_count = sum(1 for t in self.tasks_data if t.get("completed", False))
         
@@ -94,10 +103,15 @@ class EndtimeApp(App):
         header.update(f"{line1}{line2}")
 
     def update_prompt(self, text: str):
-        lbl = self.query_one("#prompt-label", Label)
-        lbl.display = True
-        lbl.update(text)
-        self.query_one("#task-input", Input).display = False
+        for screen in getattr(self, "screen_stack", [self.screen]):
+            try:
+                lbl = screen.query_one("#prompt-label", Label)
+                lbl.display = True
+                lbl.update(text)
+                screen.query_one("#task-input", Input).display = False
+                break
+            except Exception:
+                continue
 
     def load_tasks(self):
         self.tasks_data = self.storage.load_tasks()

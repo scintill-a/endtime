@@ -166,7 +166,16 @@ class SessionManager:
         from textual.widgets import ListView
         from endtime.widgets.todo_item import TodoItem
         try:
-            task_list = self.app.query_one("#task-list", ListView)
+            task_list = None
+            for screen in getattr(self.app, "screen_stack", [self.app.screen]):
+                try:
+                    task_list = screen.query_one("#task-list", ListView)
+                    break
+                except Exception:
+                    continue
+            if not task_list:
+                return
+
             for child in task_list.children:
                 if isinstance(child, TodoItem) and child.task_id == task_id:
                     task_dict = self.app.get_task_by_id(task_id)
