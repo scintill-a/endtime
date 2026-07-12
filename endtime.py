@@ -13,11 +13,21 @@ TASKS_DIR = Path.home() / ".config" / "endtime"
 TASKS_FILE = TASKS_DIR / "tasks.json"
 CONFIG_FILE = TASKS_DIR / "config.json"
 
-def parse_task(text):
-    match = re.match(r'^\[([A-Z0-9_\-\s]+)\]\s*(.*)', text, re.IGNORECASE)
+TAG_REGEX = re.compile(r'^\[([A-Z0-9_\-\s]+)\]\s*(.*)', re.IGNORECASE)
+
+def parse_task(text, task_data=None):
+    if task_data is not None and task_data.get("_cached_text") == text:
+        return task_data["_tag"], task_data["_display"]
+    match = TAG_REGEX.match(text)
     if match:
-        return match.group(1).strip().upper(), match.group(2)
-    return "GENERAL", text
+        tag, display = match.group(1).strip().upper(), match.group(2)
+    else:
+        tag, display = "GENERAL", text
+    if task_data is not None and isinstance(task_data, dict):
+        task_data["_cached_text"] = text
+        task_data["_tag"] = tag
+        task_data["_display"] = display
+    return tag, display
 
 class CategoryItem(ListItem):
     def __init__(self, text: str, collapsed: bool = False, count: int = 0, **kwargs):
@@ -167,6 +177,7 @@ class EndtimeApp(App):
                             t["id"] = str(uuid.uuid4())
             except Exception as e:
                 pass
+        self.process_habits()
         self.refresh_list()
 
     def save_tasks(self):
@@ -201,7 +212,7 @@ class EndtimeApp(App):
         today_str = date.today().isoformat()
         changed = False
         for t in self.tasks_data:
-            tag, _ = parse_task(t["text"])
+            tag, _ = parse_task(t["text"], t)
             if tag == "DAILY":
                 completed_dates = t.get("completed_dates", [])
                 
@@ -226,7 +237,6 @@ class EndtimeApp(App):
             self.save_tasks()
 
     def refresh_list(self, keep_index=True):
-        self.process_habits()
         task_list = self.query_one("#task-list", ListView)
         
         old_index = task_list.index
@@ -236,11 +246,11 @@ class EndtimeApp(App):
         
         pending = [t for t in self.tasks_data if not t.get("completed", False)]
         completed = [t for t in self.tasks_data if t.get("completed", False)]
-        completed.sort(key=lambda t: (parse_task(t["text"])[0] == "DAILY", t.get("completed_at", "")), reverse=True)
+        completed.sort(key=lambda t: (parse_task(t["text"], t)[0] == "DAILY", t.get("completed_at", "")), reverse=True)
         
         groups = {}
         for t in pending:
-            tag, display_text = parse_task(t["text"])
+            tag, display_text = parse_task(t["text"], t)
             if tag not in groups:
                 groups[tag] = []
             groups[tag].append((t, display_text))
@@ -270,7 +280,7 @@ class EndtimeApp(App):
             task_list.append(CategoryItem("CLEARED", collapsed=is_col, count=count))
             if not is_col:
                 for t in completed:
-                    tag, display_text = parse_task(t["text"])
+                    tag, display_text = parse_task(t["text"], t)
                     streak = t.get("streak", 0) if tag == "DAILY" else 0
                     focused = t.get("focused", False)
                     item = TodoItem(t["id"], t["text"], display_text, t["completed"], streak, focused)
@@ -350,7 +360,7 @@ class EndtimeApp(App):
         if idx == -1: return False
 
         task = self.tasks_data[idx]
-        task_tag, _ = parse_task(task["text"])
+        task_tag, _ = parse_task(task["text"], task)
         is_completed = task.get("completed", False)
 
         target_idx = -1
@@ -359,7 +369,7 @@ class EndtimeApp(App):
         
         while 0 <= curr < len(self.tasks_data):
             other = self.tasks_data[curr]
-            other_tag, _ = parse_task(other["text"])
+            other_tag, _ = parse_task(other["text"], other)
             if other.get("completed", False) == is_completed and other_tag == task_tag:
                 target_idx = curr
                 break
@@ -419,7 +429,7 @@ class EndtimeApp(App):
                         else:
                             if "completed_at" in task_data:
                                 del task_data["completed_at"]
-                        tag, _ = parse_task(task_data["text"])
+                        tag, _ = parse_task(task_data["text"], task_data)
                         if tag == "DAILY":
                             today_str = date.today().isoformat()
                             completed_dates = task_data.get("completed_dates", [])
@@ -499,7 +509,7 @@ class EndtimeApp(App):
             self.refresh_list(keep_index=True)
             self.action_normal_mode()
         elif self.mode == "CONFIRM_SWEEP":
-            self.tasks_data = [t for t in self.tasks_data if not t.get("completed", False) or parse_task(t["text"])[0] == "DAILY"]
+            self.tasks_data = [t for t in self.tasks_data if not t.get("completed", False) or parse_task(t["text"], t)[0] == "DAILY"]
             self.save_tasks()
             self.refresh_list(keep_index=True)
             self.action_normal_mode()
