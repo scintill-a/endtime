@@ -12,6 +12,8 @@ from endtime.models import parse_task
 from endtime.storage import StorageManager
 from endtime.habits import process_habits
 from endtime.widgets import CategoryItem, TodoItem
+from endtime.session import SessionManager, SessionType, SessionState
+
 
 
 class EndtimeApp(App):
@@ -25,6 +27,7 @@ class EndtimeApp(App):
         Binding("K", "move_up", "Move Up", show=False),
         Binding("space", "toggle", "Toggle", show=False),
         Binding("f", "toggle_focus", "Focus", show=False),
+        Binding("w", "work_session", "Work", show=False),
         Binding("enter", "toggle", "Toggle", show=False),
         Binding("d", "delete_task", "Delete", show=False),
         Binding("e", "edit_task", "Edit", show=False),
@@ -41,9 +44,11 @@ class EndtimeApp(App):
     def __init__(self):
         super().__init__()
         self.storage = StorageManager(self)
+        self.session = SessionManager(self)
         self.tasks_data = []
         self.collapsed_tags = set()
         self.mode = "NORMAL"
+        self.session_target_id = None
         self.editing_id = None
         self.pending_delete_id = None
         self.previous_highlighted = None
@@ -73,10 +78,10 @@ class EndtimeApp(App):
             mode_display = "EDIT"
             
         help_tag = r"\[H] hide" if self.show_help else r"\[H] help"
-        line1 = f" [{mode_color}]{mode_display}[/] | {completed_count}/{total} | {help_tag}"
+        line1 = f" {self.session.get_header_badge()}[{mode_color}]{mode_display}[/] | {completed_count}/{total} | {help_tag}"
         
         if self.show_help:
-            cmd_text = r"\[j/k]nav \[J/K]move \[spc]check \[f]focus \[c]collapse \[i]add \[e]edit \[d]del \[C]clear"
+            cmd_text = r"\[j/k]nav \[J/K]move \[spc]check \[f]focus \[w]work \[c]collapse \[i]add \[e]edit \[d]del \[C]clear"
             if self.mode == "INSERT":
                 cmd_text = r"\[enter]submit \[esc]cancel"
             elif self.mode.startswith("CONFIRM"):
@@ -151,7 +156,9 @@ class EndtimeApp(App):
                 for t, display_text in groups[tag]:
                     streak = t.get("streak", 0) if tag == "DAILY" else 0
                     focused = t.get("focused", False)
-                    item = TodoItem(t["id"], t["text"], display_text, t["completed"], streak, focused)
+                    session_badge = self.session.get_badge_text() if getattr(self, "session", None) and self.session.active_task_id == t["id"] else ""
+                    time_spent = t.get("time_spent_seconds", 0)
+                    item = TodoItem(t["id"], t["text"], display_text, t["completed"], streak, focused, session_badge=session_badge, time_spent_seconds=time_spent)
                     task_list.append(item)
 
         if completed:
@@ -163,7 +170,9 @@ class EndtimeApp(App):
                     tag, display_text = parse_task(t["text"], t)
                     streak = t.get("streak", 0) if tag == "DAILY" else 0
                     focused = t.get("focused", False)
-                    item = TodoItem(t["id"], t["text"], display_text, t["completed"], streak, focused)
+                    session_badge = self.session.get_badge_text() if getattr(self, "session", None) and self.session.active_task_id == t["id"] else ""
+                    time_spent = t.get("time_spent_seconds", 0)
+                    item = TodoItem(t["id"], t["text"], display_text, t["completed"], streak, focused, session_badge=session_badge, time_spent_seconds=time_spent)
                     item.add_class("-completed")
                     task_list.append(item)
             
@@ -211,6 +220,7 @@ class EndtimeApp(App):
         self.mode = "NORMAL"
         self.editing_id = None
         self.pending_delete_id = None
+        self.session_target_id = None
         self.update_header()
         
         self.query_one("#task-input", Input).display = False
@@ -436,6 +446,57 @@ class EndtimeApp(App):
             self.schedule_save(tasks=True)
             self.refresh_list(keep_index=True)
         self.action_normal_mode()
+
+    def action_work_session(self):
+        if self.mode != "NORMAL":
+            return
+        task_list = self.query_one("#task-list", ListView)
+        if task_list.index is not None and task_list.children:
+            item = task_list.children[task_list.index]
+            if isinstance(item, TodoItem):
+                if self.session.state != SessionState.IDLE and self.session.active_task_id == item.task_id:
+                    self.mode = "SESSION_CONTROL"
+                    self.update_prompt(
+                        f"[#ff4444]>[/] ACTIVE ({self.session.get_badge_text()}): \\[p]ause/resume | \\[s]top & save | \\[c]ancel"
+                    )
+                    self.update_header()
+                else:
+                    self.mode = "SESSION_SELECT"
+                    self.session_target_id = item.task_id
+                    _, task_display = parse_task(item.original_text)
+                    self.update_prompt(
+                        f"[#ff4444]>[/] SESSION FOR '{task_display[:20]}': \\[1] Pomodoro (25:00) | \\[2] Break (05:00) | \\[3] Stopwatch | \\[Esc] Cancel"
+                    )
+                    self.update_header()
+
+    def on_key(self, event) -> None:
+        if self.mode == "SESSION_SELECT" and self.session_target_id:
+            if event.character == "1":
+                self.session.start_session(self.session_target_id, SessionType.POMODORO, duration=25 * 60)
+                self.action_normal_mode()
+                event.prevent_default()
+            elif event.character == "2":
+                self.session.start_session(self.session_target_id, SessionType.BREAK, duration=5 * 60)
+                self.action_normal_mode()
+                event.prevent_default()
+            elif event.character == "3":
+                self.session.start_session(self.session_target_id, SessionType.STOPWATCH, duration=0)
+                self.action_normal_mode()
+                event.prevent_default()
+        elif self.mode == "SESSION_CONTROL":
+            if event.character in ("p", "P"):
+                self.session.toggle_pause()
+                self.action_normal_mode()
+                event.prevent_default()
+            elif event.character in ("s", "S"):
+                self.session.stop_and_save()
+                self.action_normal_mode()
+                event.prevent_default()
+            elif event.character in ("c", "C"):
+                self.session.cancel_session()
+                self.action_normal_mode()
+                event.prevent_default()
+
 
 
 def main():
