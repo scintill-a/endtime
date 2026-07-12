@@ -492,8 +492,8 @@ class EndtimeApp(App):
                     task_data = self.get_task_by_id(item.task_id)
                     if task_data:
                         task_data["focused"] = not task_data.get("focused", False)
+                        item.update_data_and_refresh(focused=task_data["focused"])
                         self.save_tasks()
-                        self.refresh_list(keep_index=True)
 
     def action_delete_task(self):
         if self.mode == "NORMAL":
