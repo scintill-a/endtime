@@ -135,7 +135,22 @@ class EndtimeApp(App):
         self.storage._flush_save(immediate=True)
 
     def refresh_list(self, keep_index=True):
-        task_list = self.query_one("#task-list", ListView)
+        task_list = None
+        for screen in getattr(self, "screen_stack", []) + [getattr(self, "screen", None)]:
+            if screen is None:
+                continue
+            try:
+                task_list = screen.query_one("#task-list", ListView)
+                break
+            except Exception:
+                continue
+        if task_list is None:
+            try:
+                task_list = self.query_one("#task-list", ListView)
+            except Exception:
+                pass
+        if task_list is None:
+            return
         old_index = task_list.index
 
         task_list.clear()
@@ -499,9 +514,6 @@ class EndtimeApp(App):
         if result == "pomodoro":
             self.session.start_session(self.session_target_id, SessionType.POMODORO, duration=25 * 60)
             self.push_screen(SessionOverlayModal(task_display, "P O M O D O R O"))
-        elif result == "break":
-            self.session.start_session(self.session_target_id, SessionType.BREAK, duration=5 * 60)
-            self.push_screen(SessionOverlayModal(task_display, "S H O R T   B R E A K"))
         elif result == "stopwatch":
             self.session.start_session(self.session_target_id, SessionType.STOPWATCH, duration=0)
             self.push_screen(SessionOverlayModal(task_display, "S T O P W A T C H"))

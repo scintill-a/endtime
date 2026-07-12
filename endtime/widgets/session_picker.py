@@ -18,12 +18,12 @@ class SessionPickerModal(ModalScreen[Optional[str]]):
         width: 38;
         height: auto;
         background: #080808;
-        border: solid #222222;
+        border: solid #ff4444;
         padding: 1 2;
     }
 
     .modal-title {
-        color: #ffffff;
+        color: #ff4444;
         text-style: bold;
         width: 100%;
         text-align: center;
@@ -57,8 +57,7 @@ class SessionPickerModal(ModalScreen[Optional[str]]):
         self.selected_index: int = 0
         self.options = [
             ("pomodoro", "[1] Pomodoro       25:00"),
-            ("break",    "[2] Short Break    05:00"),
-            ("stopwatch", "[3] Stopwatch      ∞"),
+            ("stopwatch", "[2] Stopwatch      ∞"),
         ]
 
     def compose(self) -> ComposeResult:
@@ -106,9 +105,6 @@ class SessionPickerModal(ModalScreen[Optional[str]]):
             self._safe_dismiss("pomodoro")
             event.prevent_default()
         elif event.character == "2":
-            self._safe_dismiss("break")
-            event.prevent_default()
-        elif event.character == "3":
             self._safe_dismiss("stopwatch")
             event.prevent_default()
         elif event.key == "escape" or event.character in ("q", "Q"):
