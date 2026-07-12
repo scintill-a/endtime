@@ -99,22 +99,22 @@ class SessionOverlayModal(ModalScreen[Optional[str]]):
             if hasattr(self.app, "session"):
                 if self.app.session.state == SessionState.WAITING_BREAK:
                     self.query_one("#overlay-hints", Label).update(
-                        "[#ff4444]>[/] [#ffffff][b]\\[enter/n] start 5m break[/][/]  [#777777]\\[s]ave & exit[/]"
+                        "[#ff4444]>[/] [#ffffff][b]enter/n: start 5m break[/][/]  [#777777]esc: save & exit[/]"
                     )
                     return
                 elif self.app.session.state == SessionState.WAITING_WORK:
                     next_cycle = getattr(self.app.session, "pomodoro_round", 1) + 1
                     self.query_one("#overlay-hints", Label).update(
-                        f"[#ff4444]>[/] [#ffffff][b]\\[enter/n] start cycle {next_cycle}[/][/]  [#777777]\\[s]ave & exit[/]"
+                        f"[#ff4444]>[/] [#ffffff][b]enter/n: start cycle {next_cycle}[/][/]  [#777777]esc: save & exit[/]"
                     )
                     return
 
-            pause_label = "\\[p]ause" if hasattr(self.app, "session") and self.app.session.state == SessionState.RUNNING else "\\[p]resume"
+            pause_label = "pause" if hasattr(self.app, "session") and self.app.session.state == SessionState.RUNNING else "resume"
             actions = [
                 pause_label,
-                "\\[s]ave",
-                "\\[x] tick & save",
-                "\\[c/q]ancel",
+                "save",
+                "tick & save",
+                "cancel",
             ]
             parts = []
             for i, act in enumerate(actions):
@@ -183,39 +183,24 @@ class SessionOverlayModal(ModalScreen[Optional[str]]):
                 self._on_tick()
                 event.prevent_default()
                 return
-            elif event.character in ("s", "S", "q", "Q") or event.key == "escape":
+            elif event.key == "escape":
                 self.app.session.stop_and_save()
                 self._safe_dismiss("saved")
                 event.prevent_default()
                 return
 
-        if event.key in ("right", "down", "tab"):
+        if event.character in ("l", "j") or event.key in ("right", "down", "tab"):
             self.selected_action = (self.selected_action + 1) % 4
             self._refresh_hints()
             event.prevent_default()
-        elif event.key in ("left", "up"):
+        elif event.character in ("h", "k") or event.key in ("left", "up"):
             self.selected_action = (self.selected_action - 1) % 4
             self._refresh_hints()
             event.prevent_default()
         elif event.key == "enter":
             self._execute_selected_action()
             event.prevent_default()
-        elif event.character in ("p", "P") or event.key == "space":
-            if hasattr(self.app, "session"):
-                self.app.session.toggle_pause()
-                self._on_tick()
-            event.prevent_default()
-        elif event.character in ("s", "S"):
-            if hasattr(self.app, "session"):
-                self.app.session.stop_and_save()
-            self._safe_dismiss("saved")
-            event.prevent_default()
-        elif event.character in ("x", "X"):
-            if hasattr(self.app, "session"):
-                self.app.session.tick_and_save()
-            self._safe_dismiss("ticked")
-            event.prevent_default()
-        elif event.character in ("c", "C", "q", "Q") or event.key == "escape":
+        elif event.key == "escape":
             if hasattr(self.app, "session"):
                 self.app.session.cancel_session()
             self._safe_dismiss("cancelled")
