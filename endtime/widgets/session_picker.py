@@ -56,8 +56,6 @@ class SessionPickerModal(ModalScreen[Optional[str]]):
         super().__init__(**kwargs)
         self.task_display = task_display
         self.selected_index: int = 0
-        self._pan_offset = 0
-        self._pan_interval = None
         self.options = [
             ("pomodoro", "[1] Pomodoro       25:00"),
             ("stopwatch", "[2] Stopwatch      ∞"),
@@ -66,28 +64,13 @@ class SessionPickerModal(ModalScreen[Optional[str]]):
     def compose(self) -> ComposeResult:
         with Static(id="picker-card"):
             yield Label("[b]START SESSION[/b]", classes="modal-title")
-            
-            initial_text = self.task_display if len(self.task_display) <= 28 else self.task_display[:28]
-            yield Label(initial_text, id="picker-task", classes="modal-subtitle")
-            
+            yield Label(f"{self.task_display[:28]}", classes="modal-subtitle")
             for i, (_, label_text) in enumerate(self.options):
                 yield Label("", id=f"opt-{i}", classes="modal-option")
             yield Label("\\[j/k] nav  \\[enter] select\n\\[q/esc] cancel", classes="modal-hint")
 
     def on_mount(self) -> None:
-        if len(self.task_display) > 28:
-            self._pan_interval = self.set_interval(0.15, self._on_pan)
         self._refresh_options()
-
-    def _on_pan(self) -> None:
-        spacer = "   •   "
-        scroll_text = self.task_display + spacer + self.task_display
-        idx = self._pan_offset % (len(self.task_display) + len(spacer))
-        try:
-            self.query_one("#picker-task", Label).update(scroll_text[idx:idx+28])
-        except Exception:
-            pass
-        self._pan_offset += 1
 
     def _refresh_options(self) -> None:
         for i, (_, label_text) in enumerate(self.options):
@@ -101,13 +84,6 @@ class SessionPickerModal(ModalScreen[Optional[str]]):
                 pass
 
     def _safe_dismiss(self, result: Optional[str] = None) -> None:
-        if getattr(self, "_pan_interval", None) is not None:
-            try:
-                self._pan_interval.stop()
-            except Exception:
-                pass
-            self._pan_interval = None
-            
         try:
             if getattr(self.app, "screen", None) is self:
                 self.dismiss(result)

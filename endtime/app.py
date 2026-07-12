@@ -57,6 +57,31 @@ class EndtimeApp(App):
         self.previous_highlighted = None
         self.show_help = False
 
+    def on_key(self, event):
+        if self.mode == "NORMAL":
+            if event.character == "g":
+                if getattr(self, "_pending_g", False):
+                    self.action_go_top()
+                    self._pending_g = False
+                else:
+                    self._pending_g = True
+            else:
+                self._pending_g = False
+                if event.character == "G":
+                    self.action_go_bottom()
+
+    def action_go_top(self):
+        if self.mode == "NORMAL":
+            task_list = self.query_one("#task-list", ListView)
+            if task_list.children:
+                task_list.index = 0
+
+    def action_go_bottom(self):
+        if self.mode == "NORMAL":
+            task_list = self.query_one("#task-list", ListView)
+            if task_list.children:
+                task_list.index = len(task_list.children) - 1
+
     def compose(self) -> ComposeResult:
         yield Label("", id="header", markup=True)
         yield ListView(id="task-list")

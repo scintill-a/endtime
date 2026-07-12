@@ -59,8 +59,6 @@ class SessionOverlayModal(ModalScreen[Optional[str]]):
         self.task_display = task_display
         self.session_type_display = session_type_display
         self._tick_interval = None
-        self._pan_interval = None
-        self._pan_offset = 0
 
     def compose(self) -> ComposeResult:
         title = self.session_type_display
@@ -69,33 +67,17 @@ class SessionOverlayModal(ModalScreen[Optional[str]]):
         with Static(id="overlay-card"):
             yield Label(title, id="overlay-type")
             yield Digits(self._get_timer_string(), id="overlay-timer")
-            
-            initial_text = self.task_display if len(self.task_display) <= 32 else self.task_display[:32]
-            yield Label(initial_text, id="overlay-task")
-            
+            yield Label(f"{self.task_display[:32]}", id="overlay-task")
             yield Label("", id="overlay-hints")
 
     def on_mount(self) -> None:
         self._tick_interval = self.set_interval(0.5, self._on_tick)
-        if len(self.task_display) > 32:
-            self._pan_interval = self.set_interval(0.15, self._on_pan)
-            
         if hasattr(self.app, "session") and hasattr(self.app.session, "get_overlay_title"):
             try:
                 self.query_one("#overlay-type", Label).update(self.app.session.get_overlay_title())
             except Exception:
                 pass
         self._refresh_hints()
-
-    def _on_pan(self) -> None:
-        spacer = "   •   "
-        scroll_text = self.task_display + spacer + self.task_display
-        idx = self._pan_offset % (len(self.task_display) + len(spacer))
-        try:
-            self.query_one("#overlay-task", Label).update(scroll_text[idx:idx+32])
-        except Exception:
-            pass
-        self._pan_offset += 1
 
     def _get_timer_string(self) -> str:
         if not hasattr(self.app, "session") or self.app.session.state == SessionState.IDLE:
@@ -145,14 +127,6 @@ class SessionOverlayModal(ModalScreen[Optional[str]]):
             except Exception:
                 pass
             self._tick_interval = None
-            
-        if getattr(self, "_pan_interval", None) is not None:
-            try:
-                self._pan_interval.stop()
-            except Exception:
-                pass
-            self._pan_interval = None
-            
         try:
             if getattr(self.app, "screen", None) is self:
                 self.dismiss(result)
