@@ -43,7 +43,7 @@ CategoryItem {
 
 TodoItem {
     background: #000000;
-    color: #777777;
+    color: #ffffff;
     padding-left: 0;
     padding-right: 0;
     height: auto;
