@@ -97,18 +97,31 @@ class SessionOverlayModal(ModalScreen[Optional[str]]):
             parts = []
             for i, act in enumerate(actions):
                 if i == self.selected_action:
-                    parts.append(f"[#ff4444]>[/][ffffff][b]{act}[/b][/]")
+                    parts.append(f"[#ff4444]>[/][#ffffff][b]{act}[/b][/]")
                 else:
-                    parts.append(f"[777777]{act}[/]")
+                    parts.append(f"[#777777]{act}[/]")
             
             self.query_one("#overlay-hints", Label).update("  ".join(parts))
+        except Exception:
+            pass
+
+    def _safe_dismiss(self, result: Optional[str] = None) -> None:
+        if self._tick_interval is not None:
+            try:
+                self._tick_interval.stop()
+            except Exception:
+                pass
+            self._tick_interval = None
+        try:
+            if getattr(self.app, "screen", None) is self:
+                self.dismiss(result)
         except Exception:
             pass
 
     def _on_tick(self) -> None:
         if hasattr(self.app, "session"):
             if self.app.session.state == SessionState.IDLE:
-                self.dismiss("finished")
+                self._safe_dismiss("finished")
                 return
             try:
                 self.query_one("#overlay-timer", Label).update(self._get_timer_string())
@@ -124,11 +137,11 @@ class SessionOverlayModal(ModalScreen[Optional[str]]):
         elif self.selected_action == 1:
             if hasattr(self.app, "session"):
                 self.app.session.stop_and_save()
-            self.dismiss("saved")
+            self._safe_dismiss("saved")
         elif self.selected_action == 2:
             if hasattr(self.app, "session"):
                 self.app.session.cancel_session()
-            self.dismiss("cancelled")
+            self._safe_dismiss("cancelled")
 
     def on_key(self, event) -> None:
         if event.character in ("l", "j") or event.key in ("right", "down", "tab"):
@@ -150,10 +163,10 @@ class SessionOverlayModal(ModalScreen[Optional[str]]):
         elif event.character in ("s", "S"):
             if hasattr(self.app, "session"):
                 self.app.session.stop_and_save()
-            self.dismiss("saved")
+            self._safe_dismiss("saved")
             event.prevent_default()
         elif event.character in ("c", "C", "q", "Q") or event.key == "escape":
             if hasattr(self.app, "session"):
                 self.app.session.cancel_session()
-            self.dismiss("cancelled")
+            self._safe_dismiss("cancelled")
             event.prevent_default()

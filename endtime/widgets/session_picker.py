@@ -77,11 +77,18 @@ class SessionPickerModal(ModalScreen[Optional[str]]):
             try:
                 lbl = self.query_one(f"#opt-{i}", Label)
                 if i == self.selected_index:
-                    lbl.update(f"[#ff4444]>[/] [ffffff][b]{label_text}[/b][/]")
+                    lbl.update(f"[#ff4444]>[/] [#ffffff][b]{label_text}[/b][/]")
                 else:
-                    lbl.update(f"  [aaaaaa]{label_text}[/]")
+                    lbl.update(f"  [#aaaaaa]{label_text}[/]")
             except Exception:
                 pass
+
+    def _safe_dismiss(self, result: Optional[str] = None) -> None:
+        try:
+            if getattr(self.app, "screen", None) is self:
+                self.dismiss(result)
+        except Exception:
+            pass
 
     def on_key(self, event) -> None:
         if event.character == "j" or event.key == "down":
@@ -93,17 +100,17 @@ class SessionPickerModal(ModalScreen[Optional[str]]):
             self._refresh_options()
             event.prevent_default()
         elif event.key in ("enter", "space"):
-            self.dismiss(self.options[self.selected_index][0])
+            self._safe_dismiss(self.options[self.selected_index][0])
             event.prevent_default()
         elif event.character == "1":
-            self.dismiss("pomodoro")
+            self._safe_dismiss("pomodoro")
             event.prevent_default()
         elif event.character == "2":
-            self.dismiss("break")
+            self._safe_dismiss("break")
             event.prevent_default()
         elif event.character == "3":
-            self.dismiss("stopwatch")
+            self._safe_dismiss("stopwatch")
             event.prevent_default()
         elif event.key == "escape" or event.character in ("q", "Q"):
-            self.dismiss(None)
+            self._safe_dismiss(None)
             event.prevent_default()

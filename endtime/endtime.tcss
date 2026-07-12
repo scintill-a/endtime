@@ -8,6 +8,11 @@ Screen {
     scrollbar-background: #000000;
 }
 
+ModalScreen, SessionPickerModal, SessionOverlayModal {
+    background: rgba(0, 0, 0, 0.65);
+    align: center middle;
+}
+
 #header {
     dock: top;
     width: 100%;
