@@ -1,6 +1,7 @@
 import json
 import uuid
 import re
+import functools
 from pathlib import Path
 from datetime import date, datetime, timedelta
 
@@ -138,6 +139,9 @@ class EndtimeApp(App):
         self.pending_delete_id = None
         self.previous_highlighted = None
         self.show_help = False
+        self._save_timer = None
+        self._dirty_tasks = False
+        self._dirty_config = False
 
     def compose(self) -> ComposeResult:
         yield Label("", id="header", markup=True)
@@ -221,6 +225,66 @@ class EndtimeApp(App):
         except Exception:
             pass
 
+    def schedule_save(self, tasks: bool = False, config: bool = False):
+        if tasks:
+            self._dirty_tasks = True
+        if config:
+            self._dirty_config = True
+        if self._save_timer is not None:
+            try:
+                self._save_timer.stop()
+            except Exception:
+                pass
+        self._save_timer = self.set_timer(0.3, self._flush_save)
+
+    def _flush_save(self, immediate: bool = False):
+        if self._save_timer is not None:
+            try:
+                self._save_timer.stop()
+            except Exception:
+                pass
+            self._save_timer = None
+            
+        save_t = self._dirty_tasks
+        save_c = self._dirty_config
+        self._dirty_tasks = False
+        self._dirty_config = False
+
+        if save_t:
+            if immediate:
+                self.save_tasks()
+            else:
+                self.run_worker(functools.partial(self._async_save_tasks, list(self.tasks_data)), thread=True)
+        if save_c:
+            if immediate:
+                self.save_collapsed_tags()
+            else:
+                self.run_worker(functools.partial(self._async_save_config, list(self.collapsed_tags)), thread=True)
+
+    def _async_save_tasks(self, data_copy):
+        TASKS_DIR.mkdir(parents=True, exist_ok=True)
+        try:
+            with open(TASKS_FILE, "w") as f:
+                json.dump(data_copy, f, indent=2)
+        except Exception:
+            pass
+
+    def _async_save_config(self, tags_copy):
+        TASKS_DIR.mkdir(parents=True, exist_ok=True)
+        try:
+            config_data = {}
+            if CONFIG_FILE.exists():
+                with open(CONFIG_FILE, "r") as f:
+                    config_data = json.load(f)
+            config_data["collapsed_tags"] = tags_copy
+            with open(CONFIG_FILE, "w") as f:
+                json.dump(config_data, f, indent=2)
+        except Exception:
+            pass
+
+    def on_unmount(self) -> None:
+        self._flush_save(immediate=True)
+
     def process_habits(self):
         today_str = date.today().isoformat()
         changed = False
@@ -247,7 +311,7 @@ class EndtimeApp(App):
                 t["streak"] = streak
 
         if changed:
-            self.save_tasks()
+            self.schedule_save(tasks=True)
 
     def refresh_list(self, keep_index=True):
         task_list = self.query_one("#task-list", ListView)
@@ -390,7 +454,7 @@ class EndtimeApp(App):
 
         if target_idx != -1:
             self.tasks_data[idx], self.tasks_data[target_idx] = self.tasks_data[target_idx], self.tasks_data[idx]
-            self.save_tasks()
+            self.schedule_save(tasks=True)
             return True
         return False
 
@@ -452,7 +516,7 @@ class EndtimeApp(App):
                                 completed_dates.remove(today_str)
                             task_data["completed_dates"] = completed_dates
                             
-                        self.save_tasks()
+                        self.schedule_save(tasks=True)
                         self.refresh_list(keep_index=True)
         elif self.mode in ("CONFIRM_DELETE", "CONFIRM_SWEEP"):
             self.action_confirm_yes()
@@ -476,7 +540,7 @@ class EndtimeApp(App):
                         self.collapsed_tags.remove(tag_to_toggle)
                     else:
                         self.collapsed_tags.add(tag_to_toggle)
-                    self.save_collapsed_tags()
+                    self.schedule_save(config=True)
                     self.refresh_list(keep_index=False)
                     for i, child in enumerate(task_list.children):
                         if isinstance(child, CategoryItem) and child.text == tag_to_toggle:
@@ -493,7 +557,7 @@ class EndtimeApp(App):
                     if task_data:
                         task_data["focused"] = not task_data.get("focused", False)
                         item.update_data_and_refresh(focused=task_data["focused"])
-                        self.save_tasks()
+                        self.schedule_save(tasks=True)
 
     def action_delete_task(self):
         if self.mode == "NORMAL":
@@ -561,7 +625,7 @@ class EndtimeApp(App):
                     "text": text,
                     "completed": False
                 })
-            self.save_tasks()
+            self.schedule_save(tasks=True)
             self.refresh_list(keep_index=True)
         self.action_normal_mode()
 
