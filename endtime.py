@@ -37,25 +37,23 @@ class CategoryItem(ListItem):
         self.count = count
         self.disabled = False
         self.is_highlighted = False
+        self._label = None
         
-    def compose(self) -> ComposeResult:
+    def _format_text(self, is_high: bool) -> str:
         icon = "[+]" if self.collapsed else "[-]"
-        prefix = "[#ff4444]>[/] " if self.is_highlighted else "  "
+        prefix = "[#ff4444]>[/] " if is_high else "  "
         count_text = f" ({self.count})" if self.collapsed and self.count > 0 else ""
-        yield Label(f"{prefix}{icon} --- {self.text} ---{count_text}", classes="category-label", id="category-label", markup=True)
+        return f"{prefix}{icon} --- {self.text} ---{count_text}"
+
+    def compose(self) -> ComposeResult:
+        self._label = Label(self._format_text(self.is_highlighted), classes="category-label", markup=True)
+        yield self._label
 
     def set_highlighted(self, is_high: bool):
-        self.is_highlighted = is_high
-        self.watch_is_highlighted(is_high)
-
-    def watch_is_highlighted(self, value: bool) -> None:
-        icon = "[+]" if self.collapsed else "[-]"
-        prefix = "[#ff4444]>[/] " if value else "  "
-        count_text = f" ({self.count})" if self.collapsed and self.count > 0 else ""
-        try:
-            self.query_one("#category-label", Label).update(f"{prefix}{icon} --- {self.text} ---{count_text}")
-        except Exception:
-            pass
+        if self.is_highlighted != is_high:
+            self.is_highlighted = is_high
+            if self._label is not None:
+                self._label.update(self._format_text(is_high))
 
 class TodoItem(ListItem):
     def __init__(self, task_id: str, original_text: str, display_text: str, completed: bool = False, streak: int = 0, focused: bool = False, **kwargs):
@@ -67,31 +65,46 @@ class TodoItem(ListItem):
         self.streak = streak
         self.focused = focused
         self.is_highlighted = False
+        self._label = None
 
-    def compose(self) -> ComposeResult:
-        prefix = "[#ff4444]>[/] " if self.is_highlighted else "  "
+    def _format_text(self, is_high: bool) -> str:
+        prefix = "[#ff4444]>[/] " if is_high else "  "
         status = r"[#ff4444]\[X][/]" if self.completed else r"[#ffffff]\[ ][/]"
         streak_text = f" [#ff4444]·[/] {self.streak}" if self.streak > 0 else ""
         
         content_text = self.display_text
         if self.focused and not self.completed:
             content_text = f"[#ff4444][b]{content_text}[/b][/]"
+        
+        return f"{prefix}{status} {content_text}{streak_text}"
 
-        with Horizontal():
-            yield Label(f"{prefix}{status} ", id="task-status", markup=True)
-            yield Label(content_text + streak_text, id="task-content", markup=True)
+    def compose(self) -> ComposeResult:
+        self._label = Label(self._format_text(self.is_highlighted), classes="todo-label", markup=True)
+        yield self._label
 
     def set_highlighted(self, is_high: bool):
-        self.is_highlighted = is_high
-        self.watch_is_highlighted(is_high)
+        if self.is_highlighted != is_high:
+            self.is_highlighted = is_high
+            if self._label is not None:
+                self._label.update(self._format_text(is_high))
 
-    def watch_is_highlighted(self, value: bool) -> None:
-        prefix = "[#ff4444]>[/] " if value else "  "
-        status = r"[#ff4444]\[X][/]" if self.completed else r"[#ffffff]\[ ][/]"
-        try:
-            self.query_one("#task-status", Label).update(f"{prefix}{status} ")
-        except Exception:
-            pass
+    def update_data_and_refresh(self, completed: bool = None, focused: bool = None, streak: int = None, display_text: str = None, original_text: str = None):
+        if completed is not None:
+            self.completed = completed
+            if self.completed and "-completed" not in self.classes:
+                self.add_class("-completed")
+            elif not self.completed and "-completed" in self.classes:
+                self.remove_class("-completed")
+        if focused is not None:
+            self.focused = focused
+        if streak is not None:
+            self.streak = streak
+        if display_text is not None:
+            self.display_text = display_text
+        if original_text is not None:
+            self.original_text = original_text
+        if self._label is not None:
+            self._label.update(self._format_text(self.is_highlighted))
 
 class EndtimeApp(App):
     CSS_PATH = "endtime.tcss"

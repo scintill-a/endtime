@@ -62,17 +62,8 @@ TodoItem:focus Label {
     color: #ffffff;
 }
 
-TodoItem Horizontal {
-    height: auto;
-}
-
-TodoItem #task-status {
-    width: 6;
-    height: auto;
-}
-
-TodoItem #task-content {
-    width: 1fr;
+.todo-label {
+    width: 100%;
     height: auto;
 }
 
