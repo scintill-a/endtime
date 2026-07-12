@@ -1,7 +1,8 @@
 """UI widgets for Endtime TUI."""
-from endtime.widgets.category_item import CategoryItem
-from endtime.widgets.todo_item import TodoItem
-from endtime.widgets.session_picker import SessionPickerModal
-from endtime.widgets.session_overlay import SessionOverlayModal
+from .category_item import CategoryItem
+from .todo_item import TodoItem
+from .session_picker import SessionPickerModal
+from .session_overlay import SessionOverlayModal
+from .help_modal import HelpModal
 
-__all__ = ["CategoryItem", "TodoItem", "SessionPickerModal", "SessionOverlayModal"]
+__all__ = ["CategoryItem", "TodoItem", "SessionPickerModal", "SessionOverlayModal", "HelpModal"]

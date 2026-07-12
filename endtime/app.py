@@ -11,7 +11,7 @@ from textual.containers import Horizontal
 from endtime.models import parse_task
 from endtime.storage import StorageManager
 from endtime.habits import process_habits
-from endtime.widgets import CategoryItem, TodoItem, SessionPickerModal, SessionOverlayModal
+from endtime.widgets import CategoryItem, TodoItem, SessionPickerModal, SessionOverlayModal, HelpModal
 from endtime.session import SessionManager, SessionType, SessionState
 
 
@@ -55,7 +55,6 @@ class EndtimeApp(App):
         self.pending_delete_id = None
         self.pending_reset_id = None
         self.previous_highlighted = None
-        self.show_help = False
 
     def on_key(self, event):
         if self.mode == "NORMAL":
@@ -114,20 +113,8 @@ class EndtimeApp(App):
         if self.mode == "INSERT" and self.editing_id:
             mode_display = "EDIT"
             
-        help_tag = r"\[H] hide" if self.show_help else r"\[H] help"
-        line1 = f" [{mode_color}]{mode_display}[/] | {completed_count}/{total} | {help_tag}"
-        
-        if self.show_help:
-            cmd_text = r"\[j/k]nav \[J/K]move \[spc]check \[f]focus \[w]work \[c]collapse \[i]add \[e]edit \[d]del \[C]clear"
-            if self.mode == "INSERT":
-                cmd_text = r"\[enter]submit \[esc]cancel"
-            elif self.mode.startswith("CONFIRM"):
-                cmd_text = r"\[y/enter]confirm \[n/esc]cancel"
-            line2 = f"\n {cmd_text}"
-        else:
-            line2 = ""
-        
-        header.update(f"{line1}{line2}")
+        help_tag = r"\[H] help"
+        header.update(f" [{mode_color}]{mode_display}[/] | {completed_count}/{total} | {help_tag}")
 
     def update_prompt(self, text: str):
         for screen in getattr(self, "screen_stack", [self.screen]):
@@ -358,8 +345,7 @@ class EndtimeApp(App):
 
     def action_toggle_help(self):
         if self.mode == "NORMAL":
-            self.show_help = not self.show_help
-            self.update_header()
+            self.push_screen(HelpModal())
 
     def action_toggle(self):
         if self.mode == "NORMAL":
