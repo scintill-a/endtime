@@ -113,3 +113,106 @@ TodoItem.-completed Label {
 #task-input > .input--placeholder {
     color: #333333;
 }
+
+ModalScreen {
+    align: center middle;
+    background: rgba(0, 0, 0, 0.7);
+}
+
+.dialog-box {
+    width: 60;
+    height: auto;
+    background: #0d0d0d;
+    border: solid #ff4444;
+    padding: 1 2;
+    layout: vertical;
+}
+
+.confirm-box {
+    width: 50;
+}
+
+.dialog-title {
+    text-align: center;
+    color: #ff4444;
+    text-style: bold;
+    margin-bottom: 1;
+    width: 100%;
+}
+
+.dialog-task {
+    color: #ffffff;
+    text-style: italic;
+    margin-bottom: 1;
+    text-align: center;
+    width: 100%;
+}
+
+.dialog-msg {
+    color: #ffffff;
+    margin-bottom: 1;
+    text-align: center;
+    width: 100%;
+}
+
+.dialog-status-info {
+    color: #ffffff;
+    text-style: bold;
+    background: #1a1a1a;
+    margin-bottom: 1;
+    text-align: center;
+    width: 100%;
+}
+
+.dialog-btn {
+    background: #1a1a1a;
+    color: #777777;
+    border: none;
+    width: 100%;
+    margin-bottom: 1;
+    height: 3;
+}
+
+.dialog-btn:focus {
+    background: #ff4444;
+    color: #ffffff;
+    text-style: bold;
+}
+
+.dialog-btn-small {
+    background: #1a1a1a;
+    color: #777777;
+    border: none;
+    width: 1fr;
+    margin: 0 1;
+    height: 3;
+}
+
+.dialog-btn-small:focus {
+    background: #ff4444;
+    color: #ffffff;
+    text-style: bold;
+}
+
+.dialog-buttons {
+    layout: horizontal;
+    height: 3;
+    width: 100%;
+    margin-top: 1;
+}
+
+.confirm-btn:focus {
+    background: #ff4444;
+    color: #ffffff;
+}
+
+.cancel-btn:focus {
+    background: #333333;
+    color: #ffffff;
+}
+
+.save-btn:focus {
+    background: #ff4444;
+    color: #ffffff;
+}
+

@@ -11,7 +11,7 @@ from textual.containers import Horizontal
 from endtime.models import parse_task
 from endtime.storage import StorageManager
 from endtime.habits import process_habits
-from endtime.widgets import CategoryItem, TodoItem
+from endtime.widgets import CategoryItem, TodoItem, SessionSelectDialog, SessionControlDialog, ConfirmDialog
 from endtime.session import SessionManager, SessionType, SessionState
 
 
@@ -380,38 +380,41 @@ class EndtimeApp(App):
             if task_list.index is not None and task_list.children:
                 item = task_list.children[task_list.index]
                 if isinstance(item, TodoItem):
-                    self.mode = "CONFIRM_DELETE"
-                    self.pending_delete_id = item.task_id
-                    self.update_prompt("[#ff4444]DELETE TASK? (y/n)[/]")
-                    self.update_header()
+                    delete_id = item.task_id
+                    _, task_display = parse_task(item.original_text)
+                    
+                    def delete_callback(confirmed: bool) -> None:
+                        if confirmed:
+                            self.tasks_data = [t for t in self.tasks_data if t["id"] != delete_id]
+                            self.save_tasks()
+                            self.refresh_list(keep_index=True)
+                        self.action_normal_mode()
+                    
+                    self.push_screen(
+                        ConfirmDialog("DELETE TASK?", f"Are you sure you want to delete:\n'{task_display}'?"),
+                        delete_callback
+                    )
 
     def action_sweep_cleared(self):
         if self.mode == "NORMAL":
             completed = [t for t in self.tasks_data if t.get("completed", False)]
             if not completed:
                 return
-            self.mode = "CONFIRM_SWEEP"
-            self.update_prompt("[#ff4444]SWEEP ALL CLEARED TASKS? (y/n)[/]")
-            self.update_header()
-
-    def action_confirm_yes(self):
-        if self.mode == "CONFIRM_DELETE" and self.pending_delete_id:
-            self.tasks_data = [t for t in self.tasks_data if t["id"] != self.pending_delete_id]
-            self.save_tasks()
-            self.refresh_list(keep_index=True)
-            self.action_normal_mode()
-        elif self.mode == "CONFIRM_SWEEP":
-            self.tasks_data = [
-                t for t in self.tasks_data
-                if not t.get("completed", False) or parse_task(t["text"], t)[0] == "DAILY"
-            ]
-            self.save_tasks()
-            self.refresh_list(keep_index=True)
-            self.action_normal_mode()
-
-    def action_confirm_no(self):
-        if self.mode in ("CONFIRM_DELETE", "CONFIRM_SWEEP"):
-            self.action_normal_mode()
+            
+            def sweep_callback(confirmed: bool) -> None:
+                if confirmed:
+                    self.tasks_data = [
+                        t for t in self.tasks_data
+                        if not t.get("completed", False) or parse_task(t["text"], t)[0] == "DAILY"
+                    ]
+                    self.save_tasks()
+                    self.refresh_list(keep_index=True)
+                self.action_normal_mode()
+            
+            self.push_screen(
+                ConfirmDialog("SWEEP CLEARED TASKS?", "Are you sure you want to sweep all completed tasks?"),
+                sweep_callback
+            )
 
     def action_edit_task(self):
         if self.mode == "NORMAL":
@@ -454,48 +457,38 @@ class EndtimeApp(App):
         if task_list.index is not None and task_list.children:
             item = task_list.children[task_list.index]
             if isinstance(item, TodoItem):
+                self.session_target_id = item.task_id
+                _, task_display = parse_task(item.original_text)
+                
                 if self.session.state != SessionState.IDLE and self.session.active_task_id == item.task_id:
-                    self.mode = "SESSION_CONTROL"
-                    self.update_prompt(
-                        f"[#ff4444]>[/] ACTIVE ({self.session.get_badge_text()}): \\[p]ause/resume | \\[s]top & save | \\[c]ancel"
+                    is_paused = (self.session.state == SessionState.PAUSED)
+                    def control_callback(choice: Optional[str]) -> None:
+                        if choice == "p":
+                            self.session.toggle_pause()
+                        elif choice == "s":
+                            self.session.stop_and_save()
+                        elif choice == "c":
+                            self.session.cancel_session()
+                        self.action_normal_mode()
+                    
+                    self.push_screen(
+                        SessionControlDialog(task_display, self.session.get_badge_text(), is_paused=is_paused),
+                        control_callback
                     )
-                    self.update_header()
                 else:
-                    self.mode = "SESSION_SELECT"
-                    self.session_target_id = item.task_id
-                    _, task_display = parse_task(item.original_text)
-                    self.update_prompt(
-                        f"[#ff4444]>[/] SESSION FOR '{task_display[:20]}': \\[1] Pomodoro (25:00) | \\[2] Break (05:00) | \\[3] Stopwatch | \\[Esc] Cancel"
+                    def select_callback(choice: Optional[str]) -> None:
+                        if choice == "1":
+                            self.session.start_session(self.session_target_id, SessionType.POMODORO, duration=25 * 60)
+                        elif choice == "2":
+                            self.session.start_session(self.session_target_id, SessionType.BREAK, duration=5 * 60)
+                        elif choice == "3":
+                            self.session.start_session(self.session_target_id, SessionType.STOPWATCH, duration=0)
+                        self.action_normal_mode()
+                    
+                    self.push_screen(
+                        SessionSelectDialog(task_display),
+                        select_callback
                     )
-                    self.update_header()
-
-    def on_key(self, event) -> None:
-        if self.mode == "SESSION_SELECT" and self.session_target_id:
-            if event.character == "1":
-                self.session.start_session(self.session_target_id, SessionType.POMODORO, duration=25 * 60)
-                self.action_normal_mode()
-                event.prevent_default()
-            elif event.character == "2":
-                self.session.start_session(self.session_target_id, SessionType.BREAK, duration=5 * 60)
-                self.action_normal_mode()
-                event.prevent_default()
-            elif event.character == "3":
-                self.session.start_session(self.session_target_id, SessionType.STOPWATCH, duration=0)
-                self.action_normal_mode()
-                event.prevent_default()
-        elif self.mode == "SESSION_CONTROL":
-            if event.character in ("p", "P"):
-                self.session.toggle_pause()
-                self.action_normal_mode()
-                event.prevent_default()
-            elif event.character in ("s", "S"):
-                self.session.stop_and_save()
-                self.action_normal_mode()
-                event.prevent_default()
-            elif event.character in ("c", "C"):
-                self.session.cancel_session()
-                self.action_normal_mode()
-                event.prevent_default()
 
 
 
