@@ -46,6 +46,7 @@ CategoryItem:focus .category-label {
 }
 
 TodoItem {
+    layout: horizontal;
     background: #000000;
     color: #ffffff;
     padding-left: 0;
@@ -62,8 +63,13 @@ TodoItem:focus Label {
     color: #ffffff;
 }
 
-.todo-label {
-    width: 100%;
+.todo-status {
+    width: 6;
+    height: auto;
+}
+
+.todo-content {
+    width: 1fr;
     height: auto;
 }
 

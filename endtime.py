@@ -42,7 +42,7 @@ class CategoryItem(ListItem):
         
     def _format_text(self, is_high: bool) -> str:
         icon = "[+]" if self.collapsed else "[-]"
-        prefix = "[#ff4444]>[/] " if is_high else "  "
+        prefix = "[#ff4444]>[/]" if is_high else ""
         count_text = f" ({self.count})" if self.collapsed and self.count > 0 else ""
         return f"{prefix}{icon} --- {self.text} ---{count_text}"
 
@@ -66,28 +66,32 @@ class TodoItem(ListItem):
         self.streak = streak
         self.focused = focused
         self.is_highlighted = False
-        self._label = None
+        self._status_label = None
+        self._content_label = None
 
-    def _format_text(self, is_high: bool) -> str:
+    def _get_status_text(self, is_high: bool) -> str:
         prefix = "[#ff4444]>[/] " if is_high else "  "
         status = r"[#ff4444]\[X][/]" if self.completed else r"[#ffffff]\[ ][/]"
+        return f"{prefix}{status} "
+
+    def _get_content_text(self) -> str:
         streak_text = f" [#ff4444]·[/] {self.streak}" if self.streak > 0 else ""
-        
         content_text = self.display_text
         if self.focused and not self.completed:
             content_text = f"[#ff4444][b]{content_text}[/b][/]"
-        
-        return f"{prefix}{status} {content_text}{streak_text}"
+        return f"{content_text}{streak_text}"
 
     def compose(self) -> ComposeResult:
-        self._label = Label(self._format_text(self.is_highlighted), classes="todo-label", markup=True)
-        yield self._label
+        self._status_label = Label(self._get_status_text(self.is_highlighted), classes="todo-status", markup=True)
+        self._content_label = Label(self._get_content_text(), classes="todo-content", markup=True)
+        yield self._status_label
+        yield self._content_label
 
     def set_highlighted(self, is_high: bool):
         if self.is_highlighted != is_high:
             self.is_highlighted = is_high
-            if self._label is not None:
-                self._label.update(self._format_text(is_high))
+            if self._status_label is not None:
+                self._status_label.update(self._get_status_text(is_high))
 
     def update_data_and_refresh(self, completed: bool = None, focused: bool = None, streak: int = None, display_text: str = None, original_text: str = None):
         if completed is not None:
@@ -104,8 +108,10 @@ class TodoItem(ListItem):
             self.display_text = display_text
         if original_text is not None:
             self.original_text = original_text
-        if self._label is not None:
-            self._label.update(self._format_text(self.is_highlighted))
+        if self._status_label is not None:
+            self._status_label.update(self._get_status_text(self.is_highlighted))
+        if self._content_label is not None:
+            self._content_label.update(self._get_content_text())
 
 class EndtimeApp(App):
     CSS_PATH = "endtime.tcss"
