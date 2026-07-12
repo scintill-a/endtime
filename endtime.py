@@ -11,6 +11,7 @@ from textual.containers import Horizontal
 
 TASKS_DIR = Path.home() / ".config" / "endtime"
 TASKS_FILE = TASKS_DIR / "tasks.json"
+CONFIG_FILE = TASKS_DIR / "config.json"
 
 def parse_task(text):
     match = re.match(r'^\[([A-Z0-9_\-\s]+)\]\s*(.*)', text, re.IGNORECASE)
@@ -19,13 +20,32 @@ def parse_task(text):
     return "GENERAL", text
 
 class CategoryItem(ListItem):
-    def __init__(self, text: str, **kwargs):
+    def __init__(self, text: str, collapsed: bool = False, count: int = 0, **kwargs):
         super().__init__(**kwargs)
         self.text = text
-        self.disabled = True
+        self.collapsed = collapsed
+        self.count = count
+        self.disabled = False
+        self.is_highlighted = False
         
     def compose(self) -> ComposeResult:
-        yield Label(f" --- {self.text} ---", classes="category-label")
+        icon = "[+]" if self.collapsed else "[-]"
+        prefix = "[#ff4444]>[/] " if self.is_highlighted else "  "
+        count_text = f" ({self.count})" if self.collapsed and self.count > 0 else ""
+        yield Label(f"{prefix}{icon} --- {self.text} ---{count_text}", classes="category-label", id="category-label", markup=True)
+
+    def set_highlighted(self, is_high: bool):
+        self.is_highlighted = is_high
+        self.watch_is_highlighted(is_high)
+
+    def watch_is_highlighted(self, value: bool) -> None:
+        icon = "[+]" if self.collapsed else "[-]"
+        prefix = "[#ff4444]>[/] " if value else "  "
+        count_text = f" ({self.count})" if self.collapsed and self.count > 0 else ""
+        try:
+            self.query_one("#category-label", Label).update(f"{prefix}{icon} --- {self.text} ---{count_text}")
+        except Exception:
+            pass
 
 class TodoItem(ListItem):
     def __init__(self, task_id: str, original_text: str, display_text: str, completed: bool = False, streak: int = 0, focused: bool = False, **kwargs):
@@ -77,6 +97,7 @@ class EndtimeApp(App):
         Binding("d", "delete_task", "Delete", show=False),
         Binding("e", "edit_task", "Edit", show=False),
         Binding("i", "insert_mode", "Insert", show=False),
+        Binding("c", "toggle_collapse", "Collapse", show=False),
         Binding("C", "sweep_cleared", "Sweep", show=False),
         Binding("H", "toggle_help", "Help", show=False),
         Binding("y", "confirm_yes", "Yes", show=False),
@@ -88,6 +109,7 @@ class EndtimeApp(App):
     def __init__(self):
         super().__init__()
         self.tasks_data = []
+        self.collapsed_tags = set()
         self.mode = "NORMAL"
         self.editing_id = None
         self.pending_delete_id = None
@@ -103,6 +125,7 @@ class EndtimeApp(App):
             yield Input(id="task-input")
 
     def on_mount(self) -> None:
+        self.load_collapsed_tags()
         self.load_tasks()
         self.action_normal_mode() # Start in normal mode
 
@@ -120,7 +143,7 @@ class EndtimeApp(App):
         line1 = f" [{mode_color}]{mode_display}[/] | {completed_count}/{total} | {help_tag}"
         
         if self.show_help:
-            cmd_text = r"\[j/k]nav \[J/K]move \[spc]check \[f]focus \[i]add \[e]edit \[d]del \[C]clear"
+            cmd_text = r"\[j/k]nav \[J/K]move \[spc]check \[f]focus \[c]collapse \[i]add \[e]edit \[d]del \[C]clear"
             if self.mode == "INSERT":
                 cmd_text = r"\[enter]submit \[esc]cancel"
             elif self.mode.startswith("CONFIRM"):
@@ -150,6 +173,29 @@ class EndtimeApp(App):
         TASKS_DIR.mkdir(parents=True, exist_ok=True)
         with open(TASKS_FILE, "w") as f:
             json.dump(self.tasks_data, f, indent=2)
+
+    def load_collapsed_tags(self):
+        self.collapsed_tags = set()
+        if CONFIG_FILE.exists():
+            try:
+                with open(CONFIG_FILE, "r") as f:
+                    data = json.load(f)
+                    self.collapsed_tags = set(data.get("collapsed_tags", []))
+            except Exception:
+                pass
+
+    def save_collapsed_tags(self):
+        TASKS_DIR.mkdir(parents=True, exist_ok=True)
+        try:
+            config_data = {}
+            if CONFIG_FILE.exists():
+                with open(CONFIG_FILE, "r") as f:
+                    config_data = json.load(f)
+            config_data["collapsed_tags"] = list(self.collapsed_tags)
+            with open(CONFIG_FILE, "w") as f:
+                json.dump(config_data, f, indent=2)
+        except Exception:
+            pass
 
     def process_habits(self):
         today_str = date.today().isoformat()
@@ -208,42 +254,35 @@ class EndtimeApp(App):
             sorted_tags.insert(0, "DAILY")
         
         for tag in sorted_tags:
-            task_list.append(CategoryItem(tag))
-            for t, display_text in groups[tag]:
-                streak = t.get("streak", 0) if tag == "DAILY" else 0
-                focused = t.get("focused", False)
-                item = TodoItem(t["id"], t["text"], display_text, t["completed"], streak, focused)
-                task_list.append(item)
+            is_col = (tag in self.collapsed_tags)
+            count = len(groups[tag])
+            task_list.append(CategoryItem(tag, collapsed=is_col, count=count))
+            if not is_col:
+                for t, display_text in groups[tag]:
+                    streak = t.get("streak", 0) if tag == "DAILY" else 0
+                    focused = t.get("focused", False)
+                    item = TodoItem(t["id"], t["text"], display_text, t["completed"], streak, focused)
+                    task_list.append(item)
 
         if completed:
-            task_list.append(CategoryItem("CLEARED"))
-            for t in completed:
-                tag, display_text = parse_task(t["text"])
-                streak = t.get("streak", 0) if tag == "DAILY" else 0
-                focused = t.get("focused", False)
-                item = TodoItem(t["id"], t["text"], display_text, t["completed"], streak, focused)
-                item.add_class("-completed")
-                task_list.append(item)
+            is_col = ("CLEARED" in self.collapsed_tags)
+            count = len(completed)
+            task_list.append(CategoryItem("CLEARED", collapsed=is_col, count=count))
+            if not is_col:
+                for t in completed:
+                    tag, display_text = parse_task(t["text"])
+                    streak = t.get("streak", 0) if tag == "DAILY" else 0
+                    focused = t.get("focused", False)
+                    item = TodoItem(t["id"], t["text"], display_text, t["completed"], streak, focused)
+                    item.add_class("-completed")
+                    task_list.append(item)
             
         if keep_index and old_index is not None and len(task_list.children) > 0:
             new_idx = min(old_index, len(task_list.children) - 1)
-            
-            if not isinstance(task_list.children[new_idx], TodoItem):
-                found = False
-                for i in range(new_idx, -1, -1):
-                    if isinstance(task_list.children[i], TodoItem):
-                        new_idx = i
-                        found = True
-                        break
-                if not found:
-                    for i in range(0, len(task_list.children)):
-                        if isinstance(task_list.children[i], TodoItem):
-                            new_idx = i
-                            break
             task_list.index = new_idx
         elif len(task_list) > 0:
             for i, child in enumerate(task_list.children):
-                if isinstance(child, TodoItem):
+                if isinstance(child, (TodoItem, CategoryItem)):
                     task_list.index = i
                     break
 
@@ -259,9 +298,9 @@ class EndtimeApp(App):
         self.action_toggle()
 
     def on_list_view_highlighted(self, event: ListView.Highlighted) -> None:
-        if self.previous_highlighted and isinstance(self.previous_highlighted, TodoItem):
+        if self.previous_highlighted and hasattr(self.previous_highlighted, "set_highlighted"):
             self.previous_highlighted.set_highlighted(False)
-        if event.item and isinstance(event.item, TodoItem):
+        if event.item and hasattr(event.item, "set_highlighted"):
             event.item.set_highlighted(True)
         self.previous_highlighted = event.item
 
@@ -368,6 +407,9 @@ class EndtimeApp(App):
             task_list = self.query_one("#task-list", ListView)
             if task_list.index is not None and task_list.children:
                 item = task_list.children[task_list.index]
+                if isinstance(item, CategoryItem):
+                    self.action_toggle_collapse()
+                    return
                 if isinstance(item, TodoItem):
                     task_data = self.get_task_by_id(item.task_id)
                     if task_data:
@@ -391,6 +433,32 @@ class EndtimeApp(App):
                         self.refresh_list(keep_index=True)
         elif self.mode in ("CONFIRM_DELETE", "CONFIRM_SWEEP"):
             self.action_confirm_yes()
+
+    def action_toggle_collapse(self):
+        if self.mode == "NORMAL":
+            task_list = self.query_one("#task-list", ListView)
+            if task_list.index is not None and task_list.children:
+                item = task_list.children[task_list.index]
+                tag_to_toggle = None
+                if isinstance(item, CategoryItem):
+                    tag_to_toggle = item.text
+                elif isinstance(item, TodoItem):
+                    if item.completed:
+                        tag_to_toggle = "CLEARED"
+                    else:
+                        tag_to_toggle, _ = parse_task(item.original_text)
+                
+                if tag_to_toggle:
+                    if tag_to_toggle in self.collapsed_tags:
+                        self.collapsed_tags.remove(tag_to_toggle)
+                    else:
+                        self.collapsed_tags.add(tag_to_toggle)
+                    self.save_collapsed_tags()
+                    self.refresh_list(keep_index=False)
+                    for i, child in enumerate(task_list.children):
+                        if isinstance(child, CategoryItem) and child.text == tag_to_toggle:
+                            task_list.index = i
+                            break
 
     def action_toggle_focus(self):
         if self.mode == "NORMAL":

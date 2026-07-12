@@ -41,6 +41,10 @@ CategoryItem {
     text-style: bold;
 }
 
+CategoryItem:focus .category-label {
+    color: #ffffff;
+}
+
 TodoItem {
     background: #000000;
     color: #ffffff;
