@@ -516,6 +516,8 @@ class EndtimeApp(App):
         if task_list.index is not None and task_list.children:
             item = task_list.children[task_list.index]
             if isinstance(item, TodoItem):
+                if getattr(item, "completed", False):
+                    return
                 if self.session.state != SessionState.IDLE and self.session.active_task_id == item.task_id:
                     type_display = (
                         "S T O P W A T C H"
