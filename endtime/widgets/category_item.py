@@ -15,6 +15,10 @@ class CategoryItem(ListItem):
         self.is_highlighted = False
         self._label = None
 
+    @property
+    def tag(self) -> str:
+        return self.text
+
     def _format_text(self, is_high: bool) -> str:
         icon = "[+]" if self.collapsed else "[-]"
         prefix = "[#ff4444]>[/]" if is_high else ""

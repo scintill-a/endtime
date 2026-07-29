@@ -49,6 +49,7 @@ class EndtimeApp(App):
         self.session = SessionManager(self)
         self.tasks_data = []
         self.collapsed_tags = set()
+        self.tag_order = []
         self.mode = "NORMAL"
         self.session_target_id = None
         self.editing_id = None
@@ -91,6 +92,7 @@ class EndtimeApp(App):
 
     def on_mount(self) -> None:
         self.load_collapsed_tags()
+        self.load_tag_order()
         self.load_tasks()
         self.action_normal_mode()
 
@@ -139,8 +141,11 @@ class EndtimeApp(App):
     def load_collapsed_tags(self):
         self.collapsed_tags = self.storage.load_collapsed_tags()
 
+    def load_tag_order(self):
+        self.tag_order = self.storage.load_tag_order()
+
     def save_collapsed_tags(self):
-        self.storage.save_collapsed_tags_sync(self.collapsed_tags)
+        self.storage.save_collapsed_tags_sync(self.collapsed_tags, self.tag_order)
 
     def schedule_save(self, tasks: bool = False, config: bool = False):
         self.storage.schedule_save(tasks=tasks, config=config)
@@ -184,13 +189,24 @@ class EndtimeApp(App):
                 groups[tag] = []
             groups[tag].append((t, display_text))
 
-        sorted_tags = sorted(groups.keys())
-        if "GENERAL" in sorted_tags:
-            sorted_tags.remove("GENERAL")
-            sorted_tags.insert(0, "GENERAL")
-        if "DAILY" in sorted_tags:
-            sorted_tags.remove("DAILY")
-            sorted_tags.insert(0, "DAILY")
+        present_tags = set(groups.keys())
+        if not self.tag_order:
+            default_tags = sorted(groups.keys())
+            if "GENERAL" in default_tags:
+                default_tags.remove("GENERAL")
+                default_tags.insert(0, "GENERAL")
+            if "DAILY" in default_tags:
+                default_tags.remove("DAILY")
+                default_tags.insert(0, "DAILY")
+            self.tag_order = default_tags
+
+        ordered = [t for t in self.tag_order if t in present_tags]
+        for t in sorted(groups.keys()):
+            if t not in ordered:
+                ordered.append(t)
+                if t not in self.tag_order:
+                    self.tag_order.append(t)
+        sorted_tags = ordered
         
         for tag in sorted_tags:
             is_col = (tag in self.collapsed_tags)
@@ -317,12 +333,49 @@ class EndtimeApp(App):
             return True
         return False
 
+    def _swap_tags(self, tag: str, direction: int) -> bool:
+        if tag == "CLEARED":
+            return False
+        task_list = None
+        for screen in getattr(self, "screen_stack", []) + [getattr(self, "screen", None)]:
+            if screen is None:
+                continue
+            try:
+                task_list = screen.query_one("#task-list", ListView)
+                break
+            except Exception:
+                continue
+        if task_list is None:
+            return False
+
+        active_tags = [child.tag for child in task_list.children if isinstance(child, CategoryItem) and child.tag != "CLEARED"]
+        if tag not in active_tags:
+            return False
+
+        idx = active_tags.index(tag)
+        target_idx = idx + (1 if direction == 1 else -1)
+        if 0 <= target_idx < len(active_tags):
+            other_tag = active_tags[target_idx]
+            if tag in self.tag_order and other_tag in self.tag_order:
+                pos1, pos2 = self.tag_order.index(tag), self.tag_order.index(other_tag)
+                self.tag_order[pos1], self.tag_order[pos2] = self.tag_order[pos2], self.tag_order[pos1]
+            self.schedule_save(config=True)
+            return True
+        return False
+
     def action_move_up(self):
         if self.mode == "NORMAL":
             task_list = self.query_one("#task-list", ListView)
             if task_list.index is not None and task_list.children:
                 item = task_list.children[task_list.index]
-                if isinstance(item, TodoItem):
+                if isinstance(item, CategoryItem):
+                    if self._swap_tags(item.tag, -1):
+                        self.refresh_list(keep_index=False)
+                        for i, child in enumerate(task_list.children):
+                            if isinstance(child, CategoryItem) and child.tag == item.tag:
+                                task_list.index = i
+                                break
+                elif isinstance(item, TodoItem):
                     if self._swap_tasks_in_group(item.task_id, -1):
                         self.refresh_list(keep_index=False)
                         for i, child in enumerate(task_list.children):
@@ -335,7 +388,14 @@ class EndtimeApp(App):
             task_list = self.query_one("#task-list", ListView)
             if task_list.index is not None and task_list.children:
                 item = task_list.children[task_list.index]
-                if isinstance(item, TodoItem):
+                if isinstance(item, CategoryItem):
+                    if self._swap_tags(item.tag, 1):
+                        self.refresh_list(keep_index=False)
+                        for i, child in enumerate(task_list.children):
+                            if isinstance(child, CategoryItem) and child.tag == item.tag:
+                                task_list.index = i
+                                break
+                elif isinstance(item, TodoItem):
                     if self._swap_tasks_in_group(item.task_id, 1):
                         self.refresh_list(keep_index=False)
                         for i, child in enumerate(task_list.children):

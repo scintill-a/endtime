@@ -61,7 +61,7 @@ class HelpModal(ModalScreen[None]):
             
             bindings = [
                 ("j/k", "Navigate"),
-                ("J/K", "Move Task"),
+                ("J/K", "Move Task/Tag"),
                 ("spc", "Check/Uncheck"),
                 ("i", "Add Task"),
                 ("e", "Edit Task"),

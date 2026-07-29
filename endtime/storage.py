@@ -53,8 +53,20 @@ class StorageManager:
                 pass
         return collapsed_tags
 
-    def save_collapsed_tags_sync(self, collapsed_tags: Set[str]) -> None:
-        """Save collapsed category tags directly to config file synchronously."""
+    def load_tag_order(self) -> List[str]:
+        """Load list of ordered category tag names from config file."""
+        tag_order = []
+        if CONFIG_FILE.exists():
+            try:
+                with open(CONFIG_FILE, "r") as f:
+                    data = json.load(f)
+                    tag_order = list(data.get("tag_order", []))
+            except Exception:
+                pass
+        return tag_order
+
+    def save_collapsed_tags_sync(self, collapsed_tags: Set[str], tag_order: List[str] = None) -> None:
+        """Save collapsed category tags and tag order directly to config file synchronously."""
         TASKS_DIR.mkdir(parents=True, exist_ok=True)
         try:
             config_data = {}
@@ -62,6 +74,8 @@ class StorageManager:
                 with open(CONFIG_FILE, "r") as f:
                     config_data = json.load(f)
             config_data["collapsed_tags"] = list(collapsed_tags)
+            if tag_order is not None:
+                config_data["tag_order"] = list(tag_order)
             with open(CONFIG_FILE, "w") as f:
                 json.dump(config_data, f, indent=2)
         except Exception:
@@ -102,11 +116,12 @@ class StorageManager:
                 self.app.run_worker(functools.partial(self._async_save_tasks, data_copy), thread=True)
                 
         if save_c:
+            tags_copy = list(getattr(self.app, "collapsed_tags", set()))
+            order_copy = list(getattr(self.app, "tag_order", []))
             if immediate:
-                self.save_collapsed_tags_sync(getattr(self.app, "collapsed_tags", set()))
+                self.save_collapsed_tags_sync(tags_copy, order_copy)
             else:
-                tags_copy = list(getattr(self.app, "collapsed_tags", set()))
-                self.app.run_worker(functools.partial(self._async_save_config, tags_copy), thread=True)
+                self.app.run_worker(functools.partial(self._async_save_config, tags_copy, order_copy), thread=True)
 
     def _async_save_tasks(self, data_copy: List[Dict[str, Any]]) -> None:
         TASKS_DIR.mkdir(parents=True, exist_ok=True)
@@ -116,7 +131,7 @@ class StorageManager:
         except Exception:
             pass
 
-    def _async_save_config(self, tags_copy: List[str]) -> None:
+    def _async_save_config(self, tags_copy: List[str], order_copy: List[str] = None) -> None:
         TASKS_DIR.mkdir(parents=True, exist_ok=True)
         try:
             config_data = {}
@@ -124,7 +139,10 @@ class StorageManager:
                 with open(CONFIG_FILE, "r") as f:
                     config_data = json.load(f)
             config_data["collapsed_tags"] = tags_copy
+            if order_copy is not None:
+                config_data["tag_order"] = order_copy
             with open(CONFIG_FILE, "w") as f:
                 json.dump(config_data, f, indent=2)
         except Exception:
             pass
+
