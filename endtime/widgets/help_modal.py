@@ -63,6 +63,7 @@ class HelpModal(ModalScreen[None]):
                 ("j/k", "Navigate"),
                 ("J/K", "Move Task/Tag"),
                 ("spc", "Check/Uncheck"),
+                ("y", "Yank / Copy"),
                 ("i", "Add Task"),
                 ("e", "Edit Task"),
                 ("d", "Delete Task"),

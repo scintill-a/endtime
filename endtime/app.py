@@ -17,6 +17,32 @@ from endtime.session import SessionManager, SessionType, SessionState
 
 
 
+import shutil
+import subprocess
+
+def copy_to_clipboard_system(app: App, text: str) -> None:
+    """Copy text using Textual's OSC 52 and desktop clipboard tools (wl-copy, xclip, xsel)."""
+    try:
+        app.copy_to_clipboard(text)
+    except Exception:
+        pass
+    if shutil.which("wl-copy"):
+        try:
+            subprocess.run(["wl-copy"], input=text.encode("utf-8"), check=False)
+        except Exception:
+            pass
+    elif shutil.which("xclip"):
+        try:
+            subprocess.run(["xclip", "-selection", "clipboard"], input=text.encode("utf-8"), check=False)
+        except Exception:
+            pass
+    elif shutil.which("xsel"):
+        try:
+            subprocess.run(["xsel", "--clipboard", "--input"], input=text.encode("utf-8"), check=False)
+        except Exception:
+            pass
+
+
 class EndtimeApp(App):
     """Endtime terminal user interface controller."""
     CSS_PATH = "endtime.tcss"
@@ -36,7 +62,7 @@ class EndtimeApp(App):
         Binding("c", "toggle_collapse", "Collapse", show=False),
         Binding("C", "sweep_cleared", "Sweep", show=False),
         Binding("H", "toggle_help", "Help", show=False),
-        Binding("y", "confirm_yes", "Yes", show=False),
+        Binding("y", "yank", "Yank / Copy", show=False),
         Binding("n", "confirm_no", "No", show=False),
         Binding("escape", "normal_mode", "Normal", show=False),
         Binding("q", "quit", "Quit", show=False),
@@ -530,6 +556,42 @@ class EndtimeApp(App):
             self.save_tasks()
             self.refresh_list(keep_index=True)
             self.action_normal_mode()
+
+    def action_yank(self):
+        if self.mode in ("CONFIRM_DELETE", "CONFIRM_SWEEP", "CONFIRM_RESET"):
+            self.action_confirm_yes()
+            return
+        if self.mode == "NORMAL":
+            task_list = self.query_one("#task-list", ListView)
+            if task_list.index is not None and task_list.children:
+                item = task_list.children[task_list.index]
+                text_to_copy = ""
+                msg = ""
+                if isinstance(item, TodoItem):
+                    task_data = self.get_task_by_id(item.task_id)
+                    if task_data:
+                        text_to_copy = task_data["text"]
+                        msg = "[#00ff00]COPIED TASK TO CLIPBOARD![/]"
+                elif isinstance(item, CategoryItem):
+                    tag_name = item.tag
+                    if tag_name == "CLEARED":
+                        matching = [t["text"] for t in self.tasks_data if t.get("completed", False)]
+                    else:
+                        matching = [
+                            t["text"] for t in self.tasks_data
+                            if not t.get("completed", False) and parse_task(t["text"], t)[0] == tag_name
+                        ]
+                    if matching:
+                        text_to_copy = "\n".join(matching)
+                        count_label = f"{len(matching)} TASK{'S' if len(matching)>1 else ''}"
+                        msg = f"[#00ff00]COPIED {count_label} ({tag_name}) TO CLIPBOARD![/]"
+                    else:
+                        msg = f"[#ffaa00]NO TASKS IN {tag_name} TO COPY[/]"
+
+                if text_to_copy:
+                    copy_to_clipboard_system(self, text_to_copy)
+                if msg:
+                    self.update_prompt(msg)
 
     def action_confirm_no(self):
         if self.mode in ("CONFIRM_DELETE", "CONFIRM_SWEEP", "CONFIRM_RESET"):
