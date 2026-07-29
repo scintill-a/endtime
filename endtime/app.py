@@ -17,6 +17,7 @@ from endtime.session import SessionManager, SessionType, SessionState
 
 
 
+import os
 import shutil
 import subprocess
 
@@ -26,19 +27,26 @@ def copy_to_clipboard_system(app: App, text: str) -> None:
         app.copy_to_clipboard(text)
     except Exception:
         pass
-    if shutil.which("wl-copy"):
+    
+    if shutil.which("wl-copy") and os.environ.get("WAYLAND_DISPLAY"):
         try:
-            subprocess.run(["wl-copy"], input=text.encode("utf-8"), check=False)
+            res = subprocess.run(["wl-copy"], input=text.encode("utf-8"), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+            if res.returncode == 0:
+                return
         except Exception:
             pass
-    elif shutil.which("xclip"):
+
+    if shutil.which("xclip"):
         try:
-            subprocess.run(["xclip", "-selection", "clipboard"], input=text.encode("utf-8"), check=False)
+            res = subprocess.run(["xclip", "-selection", "clipboard"], input=text.encode("utf-8"), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+            if res.returncode == 0:
+                return
         except Exception:
             pass
-    elif shutil.which("xsel"):
+
+    if shutil.which("xsel"):
         try:
-            subprocess.run(["xsel", "--clipboard", "--input"], input=text.encode("utf-8"), check=False)
+            subprocess.run(["xsel", "--clipboard", "--input"], input=text.encode("utf-8"), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
         except Exception:
             pass
 
@@ -571,7 +579,7 @@ class EndtimeApp(App):
                     task_data = self.get_task_by_id(item.task_id)
                     if task_data:
                         text_to_copy = task_data["text"]
-                        msg = "[#00ff00]COPIED TASK TO CLIPBOARD![/]"
+                        msg = "[#ff4444]COPIED TASK TO CLIPBOARD![/]"
                 elif isinstance(item, CategoryItem):
                     tag_name = item.tag
                     if tag_name == "CLEARED":
@@ -584,7 +592,7 @@ class EndtimeApp(App):
                     if matching:
                         text_to_copy = "\n".join(matching)
                         count_label = f"{len(matching)} TASK{'S' if len(matching)>1 else ''}"
-                        msg = f"[#00ff00]COPIED {count_label} ({tag_name}) TO CLIPBOARD![/]"
+                        msg = f"[#ff4444]COPIED {count_label} ({tag_name}) TO CLIPBOARD![/]"
                     else:
                         msg = f"[#ffaa00]NO TASKS IN {tag_name} TO COPY[/]"
 
