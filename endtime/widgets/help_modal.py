@@ -1,11 +1,12 @@
 """Help and keybindings cheatsheet modal for Endtime TUI."""
 from textual.app import ComposeResult
+from textual.containers import VerticalScroll
 from textual.screen import ModalScreen
 from textual.widgets import Label, Static
 
 
 class HelpModal(ModalScreen[None]):
-    """Fullscreen minimal modal overlay displaying all keybindings categorized."""
+    """Fullscreen minimal modal overlay displaying all keybindings categorized with j/k scrolling."""
 
     DEFAULT_CSS = """
     HelpModal {
@@ -14,12 +15,17 @@ class HelpModal(ModalScreen[None]):
     }
 
     #help-card {
-        width: 58;
-        height: auto;
-        align: center middle;
+        width: 60;
+        max-height: 85%;
         padding: 1 2;
         border: solid #2a2a2a;
         background: #090909;
+        overflow-y: auto;
+        scrollbar-color: #222222;
+        scrollbar-color-active: #ff4444;
+        scrollbar-color-hover: #ff6666;
+        scrollbar-background: #090909;
+        scrollbar-size-vertical: 1;
     }
 
     .help-title {
@@ -67,7 +73,7 @@ class HelpModal(ModalScreen[None]):
     """
 
     def compose(self) -> ComposeResult:
-        with Static(id="help-card"):
+        with VerticalScroll(id="help-card"):
             yield Label("E N D T I M E   //   C H E A T S H E E T", classes="help-title")
 
             sections = [
@@ -110,11 +116,42 @@ class HelpModal(ModalScreen[None]):
                         yield Label(f"\\[{key}]", classes="help-key")
                         yield Label(desc, classes="help-desc")
 
-            yield Label("\\[H / ? / esc / q] close cheatsheet", classes="help-hint")
+            yield Label("\\[j/k] scroll  •  \\[H / ? / esc / q] close", classes="help-hint")
 
     def on_key(self, event) -> None:
         key = getattr(event, "key", "").lower()
         char = getattr(event, "character", "")
-        if key in ("escape", "question_mark", "q", "h") or char in ("H", "h", "q", "Q", "?"):
+
+        try:
+            help_card = self.query_one("#help-card", VerticalScroll)
+        except Exception:
+            help_card = None
+
+        if help_card is not None and key in ("j", "down"):
+            help_card.scroll_down(animate=False)
+            event.prevent_default()
+        elif help_card is not None and key in ("k", "up"):
+            help_card.scroll_up(animate=False)
+            event.prevent_default()
+        elif help_card is not None and key == "pageup":
+            help_card.scroll_page_up(animate=False)
+            event.prevent_default()
+        elif help_card is not None and key == "pagedown":
+            help_card.scroll_page_down(animate=False)
+            event.prevent_default()
+        elif help_card is not None and (key == "home" or (char == "g" and getattr(self, "_pending_g", False))):
+            help_card.scroll_home(animate=False)
+            self._pending_g = False
+            event.prevent_default()
+        elif char == "g":
+            self._pending_g = True
+            event.prevent_default()
+        elif help_card is not None and (key == "end" or char == "G"):
+            help_card.scroll_end(animate=False)
+            self._pending_g = False
+            event.prevent_default()
+        elif key in ("escape", "question_mark", "q", "h") or char in ("H", "h", "q", "Q", "?"):
             self.dismiss()
             event.prevent_default()
+        else:
+            self._pending_g = False

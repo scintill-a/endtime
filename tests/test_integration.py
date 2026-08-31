@@ -77,10 +77,17 @@ class TestEndtimeIntegration(unittest.TestCase):
                 await pilot.press("escape")
                 self.assertEqual(pilot.app.mode, "NORMAL")
 
-                # 5. Test help modal
+                # 5. Test help modal & j/k scrolling
                 await pilot.press("question_mark")
-                self.assertTrue(any(isinstance(s, HelpModal) for s in pilot.app._screen_stack))
+                help_screen = next(s for s in pilot.app._screen_stack if isinstance(s, HelpModal))
+                self.assertIsNotNone(help_screen)
+                help_card = help_screen.query_one("#help-card")
+                initial_y = help_card.scroll_y
+                await pilot.press("j", "j")
+                self.assertGreaterEqual(help_card.scroll_y, initial_y)
+                await pilot.press("k")
                 await pilot.press("escape")
+                self.assertFalse(any(isinstance(s, HelpModal) for s in pilot.app._screen_stack))
 
                 await pilot.exit(None)
 
