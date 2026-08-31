@@ -130,27 +130,27 @@ def format_schedule_badge(scheduled_dt: datetime, now: Optional[datetime] = None
         # Overdue
         abs_diff = int(abs(diff))
         if abs_diff < 3600:
-            return f"[#ff4444][b]⏰ OVERDUE ({abs_diff // 60}m)[/b][/]"
+            return f"[#ff4444][b]⏰ [OVERDUE] ({abs_diff // 60}m)[/b][/]"
         elif abs_diff < 86400:
-            return f"[#ff4444][b]⏰ OVERDUE ({abs_diff // 3600}h)[/b][/]"
+            return f"[#ff4444][b]⏰ [OVERDUE] ({abs_diff // 3600}h)[/b][/]"
         else:
-            return f"[#ff4444][b]⏰ OVERDUE ({scheduled_dt.strftime('%b %d')})[/b][/]"
+            return f"[#ff4444][b]⏰ [OVERDUE] ({scheduled_dt.strftime('%b %d')})[/b][/]"
     elif diff < 0:
-        return "[#ff4444][b]⏰ DUE NOW[/b][/]"
+        return "[#ff4444][b]⏰ [DUE NOW][/b][/]"
     elif diff < 60:
         return "[#ff4444][b]⏰ in <1m[/b][/]"
     elif diff < 3600:
         mins = int(diff // 60)
-        return f"[#ffffff]⏰ in {mins}m[/]"
+        return f"[#666666]⏰[/] [#888888]in {mins}m[/]"
     elif scheduled_dt.date() == now.date():
         time_str = scheduled_dt.strftime("%H:%M")
         hours = int(diff // 3600)
-        return f"[#ffffff]⏰ {time_str} (in {hours}h)[/]"
+        return f"[#666666]⏰[/] [#888888]{time_str} (in {hours}h)[/]"
     elif scheduled_dt.date() == (now + timedelta(days=1)).date():
         time_str = scheduled_dt.strftime("%H:%M")
-        return f"[#888888]⏰ tmrw {time_str}[/]"
+        return f"[#555555]⏰ tmrw {time_str}[/]"
     else:
-        return f"[#888888]⏰ {scheduled_dt.strftime('%b %d %H:%M')}[/]"
+        return f"[#555555]⏰ {scheduled_dt.strftime('%b %d %H:%M')}[/]"
 
 
 def send_desktop_notification(title: str, message: str) -> None:
@@ -230,6 +230,24 @@ class ScheduleManager:
         if save_needed and hasattr(self.app, "schedule_save"):
             self.app.schedule_save(tasks=True)
 
+    def is_task_overdue(self, task_dict: Optional[Dict[str, Any]], now: Optional[datetime] = None) -> bool:
+        """Return True if task has an active, uncompleted schedule whose time has passed."""
+        if not task_dict or task_dict.get("completed", False):
+            return False
+        schedule = task_dict.get("schedule")
+        if not schedule:
+            return False
+        remind_at_str = schedule.get("remind_at") or schedule.get("scheduled_at")
+        if not remind_at_str:
+            return False
+        if now is None:
+            now = datetime.now()
+        try:
+            dt = datetime.fromisoformat(remind_at_str)
+            return (now - dt).total_seconds() > 60
+        except (ValueError, TypeError):
+            return False
+
     def _trigger_reminder(self, task: Dict[str, Any]) -> None:
         """Trigger multi-tier reminder: audio bell, desktop notification, and in-app modal."""
         # 1. Audible terminal bell
@@ -239,16 +257,33 @@ class ScheduleManager:
         _, display_text = parse_task(task.get("text", ""), task)
 
         # 2. Desktop notification
-        send_desktop_notification("Endtime Reminder", f"Task Due: {display_text}")
+        is_overdue = self.is_task_overdue(task)
+        overdue_str = ""
+        schedule = task.get("schedule") or {}
+        remind_at_str = schedule.get("remind_at") or schedule.get("scheduled_at")
+        if remind_at_str and is_overdue:
+            try:
+                dt = datetime.fromisoformat(remind_at_str)
+                diff = (datetime.now() - dt).total_seconds()
+                if diff < 3600:
+                    overdue_str = f"{int(diff // 60)}m late"
+                else:
+                    overdue_str = f"{int(diff // 3600)}h late"
+            except Exception:
+                pass
+
+        notif_title = "Endtime Reminder [OVERDUE]" if is_overdue else "Endtime Reminder"
+        send_desktop_notification(notif_title, f"Task Due: {display_text}")
 
         # 3. In-app reminder modal
         from endtime.widgets.reminder_modal import ReminderModal
         try:
             # Only push modal if not already on ReminderModal
             if not isinstance(getattr(self.app, "screen", None), ReminderModal):
-                self.app.push_screen(ReminderModal(task["id"], display_text))
+                self.app.push_screen(ReminderModal(task["id"], display_text, is_overdue=is_overdue, overdue_duration_str=overdue_str))
             elif hasattr(self.app, "update_prompt"):
-                self.app.update_prompt(f"[#ff4444][b]⏰ REMINDER: {display_text}[/b][/]")
+                status_prefix = "[OVERDUE] " if is_overdue else ""
+                self.app.update_prompt(f"[#ff4444][b]⏰ {status_prefix}REMINDER: {display_text}[/b][/]")
         except Exception:
             pass
 

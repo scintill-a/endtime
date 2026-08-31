@@ -7,7 +7,7 @@ from endtime.session import SessionType
 
 
 class ReminderModal(ModalScreen[None]):
-    """Floating modal alert displayed when a scheduled task is due."""
+    """Floating modal alert displayed when a scheduled task is due or overdue."""
 
     DEFAULT_CSS = """
     ReminderModal {
@@ -16,20 +16,28 @@ class ReminderModal(ModalScreen[None]):
     }
 
     #reminder-card {
-        width: 52;
+        width: 54;
         height: auto;
         align: center middle;
         padding: 1 2;
-        border: solid #ff4444;
+        border: solid #555555;
         background: #0d0d0d;
     }
 
+    #reminder-card.-overdue {
+        border: solid #ff4444;
+    }
+
     .reminder-header {
-        color: #ff4444;
+        color: #ffffff;
         text-style: bold;
         width: 100%;
         text-align: center;
         margin-bottom: 1;
+    }
+
+    .reminder-header.-overdue {
+        color: #ff4444;
     }
 
     .reminder-task {
@@ -41,7 +49,8 @@ class ReminderModal(ModalScreen[None]):
     }
 
     .reminder-status {
-        color: #ff4444;
+        color: #888888;
+        text-style: bold;
         width: 100%;
         text-align: center;
         margin-bottom: 1;
@@ -55,16 +64,25 @@ class ReminderModal(ModalScreen[None]):
     }
     """
 
-    def __init__(self, task_id: str, task_display: str, **kwargs):
+    def __init__(self, task_id: str, task_display: str, is_overdue: bool = False, overdue_duration_str: str = "", **kwargs):
         super().__init__(**kwargs)
         self.task_id = task_id
         self.task_display = task_display
+        self.is_overdue = is_overdue
+        self.overdue_duration_str = overdue_duration_str
 
     def compose(self) -> ComposeResult:
-        with Static(id="reminder-card"):
-            yield Label("⏰  T A S K   R E M I N D E R", classes="reminder-header")
+        card_class = "-overdue" if self.is_overdue else ""
+        with Static(id="reminder-card", classes=card_class):
+            header_title = "⏰  [OVERDUE]  T A S K   R E M I N D E R" if self.is_overdue else "⏰  T A S K   R E M I N D E R"
+            header_class = "reminder-header -overdue" if self.is_overdue else "reminder-header"
+            yield Label(header_title, classes=header_class, markup=True)
             yield Label(f"\"{self.task_display[:42]}\"", classes="reminder-task")
-            yield Label("SCHEDULED TIME HAS ARRIVED", classes="reminder-status")
+            if self.is_overdue:
+                late_txt = f" ({self.overdue_duration_str})" if self.overdue_duration_str else ""
+                yield Label(f"[#ff4444][b]⚠️ [OVERDUE]{late_txt} - SCHEDULED TIME HAS PASSED[/b][/]", classes="reminder-status", markup=True)
+            else:
+                yield Label("[#888888]SCHEDULED TIME HAS ARRIVED[/]", classes="reminder-status", markup=True)
             yield Label(
                 "[#ffffff][b]\\[w][/] Start Pomodoro    [#ffffff][b]\\[1][/] [#888888]Snooze 10m[/]\n"
                 "[#ffffff][b]\\[2][/] [#888888]Snooze 30m[/]       [#ffffff][b]\\[3][/] [#888888]Snooze 1h[/]\n"

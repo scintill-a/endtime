@@ -85,7 +85,35 @@ class TestSchedule(unittest.TestCase):
 
         # overdue by 20m
         badge2 = format_schedule_badge(datetime(2026, 8, 31, 13, 40, 0), now=now)
-        self.assertIn("OVERDUE", badge2)
+        self.assertIn("[OVERDUE]", badge2)
+        self.assertIn("20m", badge2)
+
+    def test_is_task_overdue(self):
+        app = DummyApp()
+        sm = ScheduleManager(app)
+        now = datetime(2026, 8, 31, 19, 0, 0)
+
+        # task-2 is scheduled for 18:00 (1 hour ago) -> overdue
+        task2 = app.get_task_by_id("task-2")
+        self.assertTrue(sm.is_task_overdue(task2, now=now))
+
+        # task with future schedule -> not overdue
+        future_task = {
+            "id": "t-fut",
+            "text": "Future task",
+            "completed": False,
+            "schedule": {"remind_at": "2026-08-31T20:00:00"}
+        }
+        self.assertFalse(sm.is_task_overdue(future_task, now=now))
+
+        # completed task -> not overdue
+        comp_task = {
+            "id": "t-comp",
+            "text": "Done task",
+            "completed": True,
+            "schedule": {"remind_at": "2026-08-31T18:00:00"}
+        }
+        self.assertFalse(sm.is_task_overdue(comp_task, now=now))
 
     def test_extract_and_apply_schedule(self):
         app = DummyApp()
