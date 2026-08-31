@@ -1,26 +1,27 @@
 """Session picker popup modal for Endtime TUI."""
-from typing import Optional
+from typing import Optional, Dict, Any
 from textual.app import ComposeResult
 from textual.screen import ModalScreen
 from textual.widgets import Label, Static
+from endtime.models import format_duration
 
 
 class SessionPickerModal(ModalScreen[Optional[str]]):
-    """Floating modal dialog to pick a Pomodoro, Break, or Stopwatch session."""
+    """Floating modal dialog to start or continue a Pomodoro, Break, or Stopwatch session."""
 
     DEFAULT_CSS = """
     SessionPickerModal {
         align: center middle;
-        background: rgba(0, 0, 0, 0.65);
+        background: rgba(0, 0, 0, 0.75);
     }
 
     #picker-card {
-        width: 38;
-        height: auto;
-        align: center middle;
-        padding: 1 2;
-        border: solid #333333;
-        background: #080808;
+    width: 44;
+    height: auto;
+    align: center middle;
+    padding: 1 2;
+    border: solid #2a2a2a;
+    background: #090909;
     }
 
     .modal-title {
@@ -32,7 +33,7 @@ class SessionPickerModal(ModalScreen[Optional[str]]):
     }
 
     .modal-subtitle {
-        color: #777777;
+        color: #888888;
         width: 100%;
         text-align: center;
         margin-bottom: 1;
@@ -52,34 +53,64 @@ class SessionPickerModal(ModalScreen[Optional[str]]):
     }
     """
 
-    def __init__(self, task_display: str, **kwargs):
+    def __init__(self, task_display: str, saved_session: Optional[Dict[str, Any]] = None, **kwargs):
         super().__init__(**kwargs)
         self.task_display = task_display
+        self.saved_session = saved_session
         self.selected_index: int = 0
-        self.options = [
-            ("pomodoro", "[1] Pomodoro       25:00"),
-            ("stopwatch", "[2] Stopwatch      ∞"),
-        ]
+        self.options = []
+        self._build_options()
+
+    def _build_options(self) -> None:
+        self.options = []
+        if self.saved_session:
+            stype = self.saved_session.get("type", "POMODORO")
+            if stype == "STOPWATCH":
+                time_str = format_duration(self.saved_session.get("elapsed_seconds", 0))
+                desc = f"▶ Continue Stopwatch      ({time_str})"
+            else:
+                time_str = format_duration(self.saved_session.get("remaining_seconds", 0))
+                round_num = self.saved_session.get("pomodoro_round", 1)
+                desc = f"▶ Continue {stype.capitalize()}       ({time_str} · R{round_num})"
+            self.options.append(("continue", f"[0] {desc}"))
+
+        self.options.append(("pomodoro", "[1] ⏱ Pomodoro              25:00"))
+        self.options.append(("short_break", "[2] ☕ Short Break             05:00"))
+        self.options.append(("long_break", "[3] 🌴 Long Break              15:00"))
+        self.options.append(("stopwatch", "[4] ⏱ Stopwatch              ∞"))
+
+        if self.saved_session:
+            self.options.append(("discard", "[d] ↺ Discard Saved Work"))
 
     def compose(self) -> ComposeResult:
         with Static(id="picker-card"):
-            yield Label("[b]START SESSION[/b]", classes="modal-title")
-            yield Label(f"{self.task_display[:28]}", classes="modal-subtitle")
-            for i, (_, label_text) in enumerate(self.options):
+            yield Label("W O R K   S E S S I O N", classes="modal-title")
+            yield Label(f"{self.task_display[:34]}", classes="modal-subtitle")
+            for i, (_, _) in enumerate(self.options):
                 yield Label("", id=f"opt-{i}", classes="modal-option")
-            yield Label("\\[j/k] nav  \\[enter] select\n\\[q/esc] cancel", classes="modal-hint")
+            yield Label("\\[j/k] nav  \\[enter] select  \\[q/esc] cancel", classes="modal-hint")
 
     def on_mount(self) -> None:
         self._refresh_options()
 
     def _refresh_options(self) -> None:
-        for i, (_, label_text) in enumerate(self.options):
+        for i, (action, label_text) in enumerate(self.options):
             try:
                 lbl = self.query_one(f"#opt-{i}", Label)
                 if i == self.selected_index:
-                    lbl.update(f"[#ff4444]>[/] [#ffffff][b]{label_text}[/b][/]")
+                    if action == "continue":
+                        lbl.update(f"[#ff4444]>[/] [#00e5ff][b]{label_text}[/b][/]")
+                    elif action == "discard":
+                        lbl.update(f"[#ff4444]>[/] [#ff4444][b]{label_text}[/b][/]")
+                    else:
+                        lbl.update(f"[#ff4444]>[/] [#ffffff][b]{label_text}[/b][/]")
                 else:
-                    lbl.update(f"  [#aaaaaa]{label_text}[/]")
+                    if action == "continue":
+                        lbl.update(f"  [#00b4d8]{label_text}[/]")
+                    elif action == "discard":
+                        lbl.update(f"  [#883333]{label_text}[/]")
+                    else:
+                        lbl.update(f"  [#888888]{label_text}[/]")
             except Exception:
                 pass
 
@@ -102,11 +133,23 @@ class SessionPickerModal(ModalScreen[Optional[str]]):
         elif event.key in ("enter", "space"):
             self._safe_dismiss(self.options[self.selected_index][0])
             event.prevent_default()
+        elif event.character in ("0", "c", "C") and self.saved_session:
+            self._safe_dismiss("continue")
+            event.prevent_default()
         elif event.character == "1":
             self._safe_dismiss("pomodoro")
             event.prevent_default()
         elif event.character == "2":
+            self._safe_dismiss("short_break")
+            event.prevent_default()
+        elif event.character == "3":
+            self._safe_dismiss("long_break")
+            event.prevent_default()
+        elif event.character == "4":
             self._safe_dismiss("stopwatch")
+            event.prevent_default()
+        elif event.character in ("d", "D") and self.saved_session:
+            self._safe_dismiss("discard")
             event.prevent_default()
         elif event.key == "escape" or event.character in ("q", "Q"):
             self._safe_dismiss(None)

@@ -250,7 +250,11 @@ class EndtimeApp(App):
                 for t, display_text in groups[tag]:
                     streak = t.get("streak", 0) if tag == "DAILY" else 0
                     focused = t.get("focused", False)
-                    session_badge = self.session.get_badge_text() if getattr(self, "session", None) and self.session.active_task_id == t["id"] else ""
+                    session_badge = (
+                        self.session.get_badge_text()
+                        if getattr(self, "session", None) and self.session.active_task_id == t["id"]
+                        else self.session.get_saved_badge_text(t) if getattr(self, "session", None) else ""
+                    )
                     time_spent = t.get("time_spent_seconds", 0)
                     item = TodoItem(t["id"], t["text"], display_text, t["completed"], streak, focused, session_badge=session_badge, time_spent_seconds=time_spent)
                     task_list.append(item)
@@ -264,7 +268,11 @@ class EndtimeApp(App):
                     tag, display_text = parse_task(t["text"], t)
                     streak = t.get("streak", 0) if tag == "DAILY" else 0
                     focused = t.get("focused", False)
-                    session_badge = self.session.get_badge_text() if getattr(self, "session", None) and self.session.active_task_id == t["id"] else ""
+                    session_badge = (
+                        self.session.get_badge_text()
+                        if getattr(self, "session", None) and self.session.active_task_id == t["id"]
+                        else self.session.get_saved_badge_text(t) if getattr(self, "session", None) else ""
+                    )
                     time_spent = t.get("time_spent_seconds", 0)
                     item = TodoItem(t["id"], t["text"], display_text, t["completed"], streak, focused, session_badge=session_badge, time_spent_seconds=time_spent)
                     item.add_class("-completed")
@@ -649,20 +657,13 @@ class EndtimeApp(App):
                 if getattr(item, "completed", False):
                     return
                 if self.session.state != SessionState.IDLE and self.session.active_task_id == item.task_id:
-                    type_display = (
-                        "S T O P W A T C H"
-                        if self.session.session_type == SessionType.STOPWATCH
-                        else (
-                            "P O M O D O R O"
-                            if self.session.session_type == SessionType.POMODORO
-                            else "S H O R T   B R E A K"
-                        )
-                    )
-                    self.push_screen(SessionOverlayModal(item.display_text, type_display))
+                    self.push_screen(SessionOverlayModal(item.display_text, self.session.get_overlay_title()))
                 else:
                     self.session_target_id = item.task_id
-                    _, task_display = parse_task(item.original_text)
-                    self.push_screen(SessionPickerModal(task_display), callback=self._on_picker_result)
+                    task_dict = self.get_task_by_id(item.task_id)
+                    saved = task_dict.get("saved_session") if task_dict else None
+                    _, task_display = parse_task(item.original_text, task_dict)
+                    self.push_screen(SessionPickerModal(task_display, saved_session=saved), callback=self._on_picker_result)
 
     def _on_picker_result(self, result: Optional[str]) -> None:
         if not result or not self.session_target_id:
@@ -671,13 +672,26 @@ class EndtimeApp(App):
 
         task_dict = self.get_task_by_id(self.session_target_id)
         if not task_dict:
+            self.session_target_id = None
             return
 
         _, task_display = parse_task(task_dict["text"], task_dict)
 
-        if result == "pomodoro":
+        if result == "continue":
+            self.session.start_session(self.session_target_id, SessionType.POMODORO, resume=True)
+            self.push_screen(SessionOverlayModal(task_display, self.session.get_overlay_title()))
+        elif result == "discard":
+            self.session.clear_saved_session(self.session_target_id)
+            self.refresh_list(keep_index=True)
+        elif result == "pomodoro":
             self.session.start_session(self.session_target_id, SessionType.POMODORO, duration=25 * 60)
             self.push_screen(SessionOverlayModal(task_display, "P O M O D O R O"))
+        elif result == "short_break":
+            self.session.start_session(self.session_target_id, SessionType.BREAK, duration=5 * 60)
+            self.push_screen(SessionOverlayModal(task_display, "S H O R T   B R E A K"))
+        elif result == "long_break":
+            self.session.start_session(self.session_target_id, SessionType.LONG_BREAK, duration=15 * 60)
+            self.push_screen(SessionOverlayModal(task_display, "L O N G   B R E A K"))
         elif result == "stopwatch":
             self.session.start_session(self.session_target_id, SessionType.STOPWATCH, duration=0)
             self.push_screen(SessionOverlayModal(task_display, "S T O P W A T C H"))

@@ -7,22 +7,32 @@ from endtime.models import format_duration
 from endtime.session import SessionState, SessionType
 
 
+def render_ascii_progress_bar(ratio: float, width: int = 24) -> str:
+    """Render a sleek ASCII progress bar."""
+    ratio = max(0.0, min(1.0, ratio))
+    filled = int(round(ratio * width))
+    empty = width - filled
+    pct = int(round(ratio * 100))
+    bar = "█" * filled + "░" * empty
+    return f"[#ff4444]{bar[:filled]}[/][#333333]{bar[filled:]}[/] {pct}%"
+
+
 class SessionOverlayModal(ModalScreen[Optional[str]]):
-    """Fullscreen minimal modal overlay covering other tasks to purely focus on the ticking clock and active task."""
+    """Fullscreen minimal modal overlay to purely focus on the ticking clock and active task."""
 
     DEFAULT_CSS = """
     SessionOverlayModal {
         align: center middle;
-        background: rgba(0, 0, 0, 0.65);
+        background: rgba(0, 0, 0, 0.75);
     }
 
     #overlay-card {
-        width: 44;
+        width: 50;
         height: auto;
         align: center middle;
         padding: 1 2;
-        border: solid #333333;
-        background: #080808;
+        border: solid #2a2a2a;
+        background: #090909;
     }
 
     #overlay-type {
@@ -40,11 +50,25 @@ class SessionOverlayModal(ModalScreen[Optional[str]]):
         width: 100%;
     }
 
-    #overlay-task {
-        color: #aaaaaa;
+    #overlay-progress {
+        color: #888888;
         width: 100%;
         text-align: center;
-        margin-bottom: 2;
+        margin-bottom: 1;
+    }
+
+    #overlay-cycles {
+        color: #888888;
+        width: 100%;
+        text-align: center;
+        margin-bottom: 1;
+    }
+
+    #overlay-task {
+        color: #cccccc;
+        width: 100%;
+        text-align: center;
+        margin-bottom: 1;
     }
 
     #overlay-hints {
@@ -67,52 +91,67 @@ class SessionOverlayModal(ModalScreen[Optional[str]]):
         with Static(id="overlay-card"):
             yield Label(title, id="overlay-type")
             yield Digits(self._get_timer_string(), id="overlay-timer")
-            yield Label(f"{self.task_display[:32]}", id="overlay-task")
-            yield Label("", id="overlay-hints")
+            yield Label("", id="overlay-progress", markup=True)
+            yield Label("", id="overlay-cycles", markup=True)
+            yield Label(f"[b]{self.task_display[:38]}[/b]", id="overlay-task", markup=True)
+            yield Label("", id="overlay-hints", markup=True)
 
     def on_mount(self) -> None:
         self._tick_interval = self.set_interval(0.5, self._on_tick)
-        if hasattr(self.app, "session") and hasattr(self.app.session, "get_overlay_title"):
-            try:
-                self.query_one("#overlay-type", Label).update(self.app.session.get_overlay_title())
-            except Exception:
-                pass
-        self._refresh_hints()
+        self._on_tick()
 
     def _get_timer_string(self) -> str:
         if not hasattr(self.app, "session") or self.app.session.state == SessionState.IDLE:
             return "00:00"
-        
+
         if self.app.session.session_type == SessionType.STOPWATCH:
-            time_str = format_duration(self.app.session.elapsed_seconds)
+            return format_duration(self.app.session.elapsed_seconds)
         else:
-            time_str = format_duration(self.app.session.duration_seconds)
-            
-        return time_str
+            return format_duration(self.app.session.duration_seconds)
+
+    def _render_cycles(self) -> str:
+        if not hasattr(self.app, "session"):
+            return ""
+        if self.app.session.session_type not in (SessionType.POMODORO, SessionType.BREAK, SessionType.LONG_BREAK):
+            return ""
+        current = getattr(self.app.session, "pomodoro_round", 1)
+        cycle_idx = ((current - 1) % 4) + 1
+        pills = []
+        for i in range(1, 5):
+            if i < cycle_idx:
+                pills.append("[#ff4444]●[/]")
+            elif i == cycle_idx:
+                pills.append("[#00e5ff]●[/]" if self.app.session.is_break else "[#ffffff][b]●[/b][/]")
+            else:
+                pills.append("[#333333]○[/]")
+        return "Cycles: " + " ".join(pills)
 
     def _refresh_hints(self) -> None:
         try:
             if hasattr(self.app, "session"):
                 if self.app.session.state == SessionState.WAITING_BREAK:
+                    is_long = getattr(self.app.session, "pomodoro_round", 1) % 4 == 0
+                    break_len = "15m long" if is_long else "5m"
                     self.query_one("#overlay-hints", Label).update(
-                        "[#ffffff][b]\\[enter/n] start 5m break[/][/]\n[#777777]\\[s] save & exit[/]"
+                        f"[#00e5ff][b]\\[enter/n] start {break_len} break[/][/]\n[#777777]\\[s] save & exit   \\[m/esc] minimize[/]"
                     )
                     return
                 elif self.app.session.state == SessionState.WAITING_WORK:
                     next_cycle = getattr(self.app.session, "pomodoro_round", 1) + 1
                     self.query_one("#overlay-hints", Label).update(
-                        f"[#ffffff][b]\\[enter/n] start cycle {next_cycle}[/][/]\n[#777777]\\[s] save & exit[/]"
+                        f"[#ffffff][b]\\[enter/n] start cycle {next_cycle}[/][/]\n[#777777]\\[s] save & exit   \\[m/esc] minimize[/]"
                     )
                     return
 
             pause_label = "\\[p] pause" if hasattr(self.app, "session") and self.app.session.state == SessionState.RUNNING else "\\[p] resume"
             actions_line1 = [
                 pause_label,
+                "\\[m/esc] minimize",
                 "\\[s] save",
             ]
             actions_line2 = [
-                "\\[x] finish",
-                "\\[c/q] cancel",
+                "\\[x] finish task",
+                "\\[c] cancel",
             ]
             part1 = "  ".join(f"[#777777]{act}[/]" for act in actions_line1)
             part2 = "  ".join(f"[#777777]{act}[/]" for act in actions_line2)
@@ -145,9 +184,19 @@ class SessionOverlayModal(ModalScreen[Optional[str]]):
                     timer_widget.styles.color = "#777777"
                 else:
                     timer_widget.styles.color = "#ffffff"
-                    
+
                 if hasattr(self.app.session, "get_overlay_title"):
                     self.query_one("#overlay-type", Label).update(self.app.session.get_overlay_title())
+
+                if hasattr(self.app.session, "get_progress"):
+                    _, _, ratio = self.app.session.get_progress()
+                    if self.app.session.session_type != SessionType.STOPWATCH:
+                        self.query_one("#overlay-progress", Label).update(render_ascii_progress_bar(ratio))
+                        self.query_one("#overlay-progress", Label).display = True
+                    else:
+                        self.query_one("#overlay-progress", Label).display = False
+
+                self.query_one("#overlay-cycles", Label).update(self._render_cycles())
                 self._refresh_hints()
             except Exception:
                 pass
@@ -159,9 +208,14 @@ class SessionOverlayModal(ModalScreen[Optional[str]]):
                 self._on_tick()
                 event.prevent_default()
                 return
-            elif event.character in ("s", "S", "q", "Q") or event.key == "escape":
-                self.app.session.stop_and_save()
+            elif event.character in ("s", "S"):
+                self.app.session.stop_and_save(preserve_snapshot=True)
                 self._safe_dismiss("saved")
+                event.prevent_default()
+                return
+            elif event.key == "escape" or event.character in ("m", "M"):
+                # Minimize overlay to background
+                self._safe_dismiss("minimized")
                 event.prevent_default()
                 return
 
@@ -170,9 +224,13 @@ class SessionOverlayModal(ModalScreen[Optional[str]]):
                 self.app.session.toggle_pause()
                 self._on_tick()
             event.prevent_default()
+        elif event.character in ("m", "M") or event.key == "escape":
+            # Minimize to background without stopping/canceling timer
+            self._safe_dismiss("minimized")
+            event.prevent_default()
         elif event.character in ("s", "S"):
             if hasattr(self.app, "session"):
-                self.app.session.stop_and_save()
+                self.app.session.stop_and_save(preserve_snapshot=True)
             self._safe_dismiss("saved")
             event.prevent_default()
         elif event.character in ("x", "X"):
@@ -180,7 +238,7 @@ class SessionOverlayModal(ModalScreen[Optional[str]]):
                 self.app.session.tick_and_save()
             self._safe_dismiss("ticked")
             event.prevent_default()
-        elif event.character in ("c", "C", "q", "Q") or event.key == "escape":
+        elif event.character in ("c", "C", "q", "Q"):
             if hasattr(self.app, "session"):
                 self.app.session.cancel_session()
             self._safe_dismiss("cancelled")
