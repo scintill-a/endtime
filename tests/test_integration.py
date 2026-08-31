@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from textual.events import Key
 from textual.widgets import Input, ListView
 from endtime.app import EndtimeApp, format_progress_gauge
-from endtime.widgets import SessionPickerModal, SessionOverlayModal, ScheduleModal, HelpModal
+from endtime.widgets import SessionPickerModal, SessionOverlayModal, ScheduleModal, HelpModal, TodoItem, CategoryItem
 
 
 import json
@@ -221,6 +221,51 @@ class TestEndtimeIntegration(unittest.TestCase):
 
         picker_modal.on_key(Key("k", "k"))
         self.assertEqual(picker_modal.selected_index, 0)
+
+    def test_reset_timer_flow(self):
+        """Test resetting accumulated time and active session timers."""
+        async def run():
+            app = EndtimeApp()
+            async with app.run_test(headless=True) as pilot:
+                task_list = pilot.app.query_one("#task-list", ListView)
+                todo_idx = next(i for i, c in enumerate(task_list.children) if isinstance(c, TodoItem))
+                task_list.index = todo_idx
+                item = task_list.children[todo_idx]
+                target_task = pilot.app.get_task_by_id(item.task_id)
+                target_task["time_spent_seconds"] = 1200
+                pilot.app.refresh_list(keep_index=True)
+
+                # Press r to initiate timer reset on item
+                await pilot.press("r")
+                self.assertEqual(pilot.app.mode, "CONFIRM_RESET")
+                self.assertEqual(pilot.app.pending_reset_id, target_task["id"])
+
+                # Confirm with y
+                await pilot.press("y")
+                self.assertEqual(pilot.app.mode, "NORMAL")
+                self.assertEqual(target_task["time_spent_seconds"], 0)
+
+                # Test reset on CategoryItem
+                task_list.index = 0
+                cat_item = task_list.children[0]
+                self.assertTrue(isinstance(cat_item, CategoryItem))
+                await pilot.press("r")
+                self.assertEqual(pilot.app.mode, "CONFIRM_RESET")
+                self.assertEqual(pilot.app.pending_reset_category, cat_item.tag)
+                await pilot.press("y")
+                self.assertEqual(pilot.app.mode, "NORMAL")
+
+                # Test reset active session via session manager
+                pilot.app.session.start_session(target_task["id"], "POMODORO", duration=25 * 60)
+                pilot.app.session.elapsed_seconds = 300
+                pilot.app.session.duration_seconds = 20 * 60
+                pilot.app.session.reset_active_session()
+                self.assertEqual(pilot.app.session.elapsed_seconds, 0)
+                self.assertEqual(pilot.app.session.duration_seconds, 25 * 60)
+
+                await pilot.exit(None)
+
+        asyncio.run(run())
 
     def test_progress_gauge_strict_palette(self):
         """Test progress gauge rendering adhering strictly to red/white/gray palette."""

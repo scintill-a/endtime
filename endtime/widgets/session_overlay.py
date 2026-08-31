@@ -146,10 +146,11 @@ class SessionOverlayModal(ModalScreen[Optional[str]]):
             pause_label = "\\[p] pause" if hasattr(self.app, "session") and self.app.session.state == SessionState.RUNNING else "\\[p] resume"
             actions_line1 = [
                 pause_label,
+                "\\[r] reset",
                 "\\[m/esc] minimize",
-                "\\[s] save",
             ]
             actions_line2 = [
+                "\\[s] save",
                 "\\[x] finish task",
                 "\\[c] cancel",
             ]
@@ -225,6 +226,11 @@ class SessionOverlayModal(ModalScreen[Optional[str]]):
         if key in ("p", "space") or char in ("p", "P"):
             if hasattr(self.app, "session"):
                 self.app.session.toggle_pause()
+                self._on_tick()
+            event.prevent_default()
+        elif key == "r" or char in ("r", "R"):
+            if hasattr(self.app, "session"):
+                self.app.session.reset_active_session()
                 self._on_tick()
             event.prevent_default()
         elif key in ("m", "escape") or char in ("m", "M"):

@@ -122,8 +122,21 @@ class EndtimeApp(App):
         self._toast_timer = None
 
     def on_key(self, event):
+        key = getattr(event, "key", "").lower()
+        char = getattr(event, "character", "")
+
+        if self.mode in ("CONFIRM_DELETE", "CONFIRM_SWEEP", "CONFIRM_RESET"):
+            if key in ("y", "enter", "space") or char in ("y", "Y"):
+                self.action_confirm_yes()
+                event.prevent_default()
+                return
+            elif key in ("n", "escape", "q") or char in ("n", "N", "q", "Q"):
+                self.action_confirm_no()
+                event.prevent_default()
+                return
+
         if self.mode == "NORMAL":
-            if event.character == "g":
+            if char == "g":
                 if getattr(self, "_pending_g", False):
                     self.action_go_top()
                     self._pending_g = False
@@ -131,7 +144,7 @@ class EndtimeApp(App):
                     self._pending_g = True
             else:
                 self._pending_g = False
-                if event.character == "G":
+                if char == "G":
                     self.action_go_bottom()
 
     def action_go_top(self):
@@ -429,6 +442,7 @@ class EndtimeApp(App):
         self.search_query = ""
         self.editing_id = None
         self.pending_delete_id = None
+        self.pending_reset_id = None
         self.session_target_id = None
         self.schedule_target_id = None
         self.update_header()
@@ -641,7 +655,14 @@ class EndtimeApp(App):
                 if isinstance(item, TodoItem):
                     self.mode = "CONFIRM_RESET"
                     self.pending_reset_id = item.task_id
+                    self.pending_reset_category = None
                     self.update_prompt("[#ff4444]RESET TIMER? (y/n)[/]")
+                    self.update_header()
+                elif isinstance(item, CategoryItem):
+                    self.mode = "CONFIRM_RESET"
+                    self.pending_reset_id = None
+                    self.pending_reset_category = item.tag
+                    self.update_prompt(f"[#ff4444]RESET ALL TIMERS IN [{item.tag}]? (y/n)[/]")
                     self.update_header()
 
     def action_sweep_cleared(self):
@@ -668,14 +689,29 @@ class EndtimeApp(App):
             self.save_tasks()
             self.show_toast(f"[#ffffff]✓ SWEPT {count} COMPLETED TASKS[/]")
             self.action_normal_mode()
-        elif self.mode == "CONFIRM_RESET" and self.pending_reset_id:
-            for t in self.tasks_data:
-                if t["id"] == self.pending_reset_id:
-                    t["time_spent_seconds"] = 0
-                    break
-            self.save_tasks()
-            self.show_toast("[#ffffff]✓ TIMER RESET TO 0s[/]")
-            self.action_normal_mode()
+        elif self.mode == "CONFIRM_RESET":
+            if self.pending_reset_id:
+                target_id = self.pending_reset_id
+                for t in self.tasks_data:
+                    if t["id"] == target_id:
+                        t["time_spent_seconds"] = 0
+                        t["saved_session"] = None
+                        break
+                if hasattr(self, "session") and self.session.active_task_id == target_id:
+                    self.session.cancel_session()
+                self.save_tasks()
+                self.show_toast("[#ffffff]✓ TIMER RESET TO 0s[/]")
+                self.action_normal_mode()
+            elif getattr(self, "pending_reset_category", None):
+                cat = self.pending_reset_category
+                for t in self.tasks_data:
+                    tag, _ = parse_task(t.get("text", ""), t)
+                    if tag == cat or (cat == "CLEARED" and t.get("completed", False)):
+                        t["time_spent_seconds"] = 0
+                        t["saved_session"] = None
+                self.save_tasks()
+                self.show_toast(f"[#ffffff]✓ RESET ALL TIMERS IN [{cat}][/]")
+                self.action_normal_mode()
 
     def action_yank(self):
         if self.mode in ("CONFIRM_DELETE", "CONFIRM_SWEEP", "CONFIRM_RESET"):

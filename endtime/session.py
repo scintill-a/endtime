@@ -253,6 +253,22 @@ class SessionManager:
                 self.app.schedule_save(tasks=True)
             self._refresh_widget_by_id(task_id)
 
+    def reset_active_session(self) -> None:
+        """Reset elapsed time and cycle duration of the currently active session."""
+        if self.state == SessionState.IDLE:
+            return
+        if self.session_type == SessionType.STOPWATCH:
+            self.elapsed_seconds = 0
+        else:
+            self.duration_seconds = self.total_cycle_seconds
+            self.elapsed_seconds = 0
+        if self.active_task_id:
+            self._persist_snapshot_to_task(self.active_task_id)
+        self._refresh_active_widget()
+        self._refresh_overlay_modal()
+        if hasattr(self.app, "update_header"):
+            self.app.update_header()
+
     def _persist_snapshot_to_task(self, task_id: Optional[str]) -> None:
         """Write current session state snapshot to the task object."""
         if not task_id:
