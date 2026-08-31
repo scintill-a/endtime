@@ -327,8 +327,10 @@ class SessionManager:
     def _refresh_overlay_modal(self) -> None:
         from endtime.widgets.session_overlay import SessionOverlayModal
         try:
-            if isinstance(getattr(self.app, "screen", None), SessionOverlayModal):
-                self.app.screen._on_tick()
+            for screen in reversed(getattr(self.app, "_screen_stack", [])):
+                if isinstance(screen, SessionOverlayModal):
+                    screen._on_tick()
+                    break
         except Exception:
             pass
 
@@ -429,19 +431,15 @@ class SessionManager:
         from endtime.widgets.todo_item import TodoItem
         try:
             task_list = None
-            for screen in getattr(self.app, "screen_stack", []) + [getattr(self.app, "screen", None)]:
-                if screen is None:
-                    continue
-                try:
-                    task_list = screen.query_one("#task-list", ListView)
-                    break
-                except Exception:
-                    continue
-            if task_list is None:
-                try:
-                    task_list = self.app.query_one("#task-list", ListView)
-                except Exception:
-                    return
+            try:
+                task_list = self.app.query_one("#task-list", ListView)
+            except Exception:
+                for screen in reversed(getattr(self.app, "_screen_stack", [])):
+                    try:
+                        task_list = screen.query_one("#task-list", ListView)
+                        break
+                    except Exception:
+                        continue
             if task_list is None:
                 return
 

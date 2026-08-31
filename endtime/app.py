@@ -157,7 +157,9 @@ class EndtimeApp(App):
     def on_mount(self) -> None:
         self.load_collapsed_tags()
         self.load_tag_order()
-        self.load_tasks()
+        self.tasks_data = self.storage.load_tasks()
+        if process_habits(self.tasks_data):
+            self.schedule_save(tasks=True)
         self.scheduler.start_ticker()
         self.action_normal_mode()
 
@@ -166,14 +168,9 @@ class EndtimeApp(App):
         self.storage._flush_save(immediate=True)
 
     def update_header(self):
-        header = None
-        for screen in getattr(self, "screen_stack", [self.screen]):
-            try:
-                header = screen.query_one("#header", Label)
-                break
-            except Exception:
-                continue
-        if not header:
+        try:
+            header = self.query_one("#header", Label)
+        except Exception:
             return
 
         total = len(self.tasks_data)
@@ -199,15 +196,13 @@ class EndtimeApp(App):
         header.update(header_text)
 
     def update_prompt(self, text: str):
-        for screen in getattr(self, "screen_stack", [self.screen]):
-            try:
-                lbl = screen.query_one("#prompt-label", Label)
-                lbl.display = True
-                lbl.update(text)
-                screen.query_one("#task-input", Input).display = False
-                break
-            except Exception:
-                continue
+        try:
+            lbl = self.query_one("#prompt-label", Label)
+            lbl.display = True
+            lbl.update(text)
+            self.query_one("#task-input", Input).display = False
+        except Exception:
+            pass
 
     def show_toast(self, message: str, duration: float = 2.5) -> None:
         """Display a transient HUD notification banner in the prompt bar."""
@@ -247,26 +242,24 @@ class EndtimeApp(App):
     def schedule_save(self, tasks: bool = False, config: bool = False):
         self.storage.schedule_save(tasks=tasks, config=config)
 
+    def _get_task_list(self) -> Optional[ListView]:
+        try:
+            return self.query_one("#task-list", ListView)
+        except Exception:
+            pass
+        for screen in reversed(getattr(self, "_screen_stack", [])):
+            try:
+                return screen.query_one("#task-list", ListView)
+            except Exception:
+                continue
+        return None
+
     def refresh_list(self, keep_index=True):
-        task_list = None
-        for screen in getattr(self, "screen_stack", []) + [getattr(self, "screen", None)]:
-            if screen is None:
-                continue
-            try:
-                task_list = screen.query_one("#task-list", ListView)
-                break
-            except Exception:
-                continue
-        if task_list is None:
-            try:
-                task_list = self.query_one("#task-list", ListView)
-            except Exception:
-                pass
+        task_list = self._get_task_list()
         if task_list is None:
             return
         old_index = task_list.index
 
-        task_list.clear()
         self.previous_highlighted = None
 
         pending = [t for t in self.tasks_data if not t.get("completed", False)]
@@ -307,6 +300,8 @@ class EndtimeApp(App):
                     self.tag_order.append(t)
         sorted_tags = ordered
 
+        items_to_add = []
+
         for tag in sorted_tags:
             is_col = (tag in self.collapsed_tags)
             group_pending = groups[tag]
@@ -316,7 +311,7 @@ class EndtimeApp(App):
                 if t.get("completed", False) and parse_task(t["text"], t)[0] == tag
             )
             total_in_tag = count + completed_in_tag
-            task_list.append(CategoryItem(tag, collapsed=is_col, count=total_in_tag, completed_count=completed_in_tag))
+            items_to_add.append(CategoryItem(tag, collapsed=is_col, count=total_in_tag, completed_count=completed_in_tag))
 
             if not is_col:
                 for t, display_text in group_pending:
@@ -329,23 +324,24 @@ class EndtimeApp(App):
                     )
                     sched_badge = self.scheduler.get_schedule_badge(t) if getattr(self, "scheduler", None) else ""
                     time_spent = t.get("time_spent_seconds", 0)
-                    item = TodoItem(
-                        t["id"],
-                        t["text"],
-                        display_text,
-                        t["completed"],
-                        streak,
-                        focused,
-                        session_badge=session_badge,
-                        schedule_badge=sched_badge,
-                        time_spent_seconds=time_spent,
+                    items_to_add.append(
+                        TodoItem(
+                            t["id"],
+                            t["text"],
+                            display_text,
+                            t["completed"],
+                            streak,
+                            focused,
+                            session_badge=session_badge,
+                            schedule_badge=sched_badge,
+                            time_spent_seconds=time_spent,
+                        )
                     )
-                    task_list.append(item)
 
         if completed:
             is_col = ("CLEARED" in self.collapsed_tags)
             count = len(completed)
-            task_list.append(CategoryItem("CLEARED", collapsed=is_col, count=count, completed_count=count))
+            items_to_add.append(CategoryItem("CLEARED", collapsed=is_col, count=count, completed_count=count))
             if not is_col:
                 for t in completed:
                     tag, display_text = parse_task(t["text"], t)
@@ -370,16 +366,17 @@ class EndtimeApp(App):
                         time_spent_seconds=time_spent,
                     )
                     item.add_class("-completed")
-                    task_list.append(item)
+                    items_to_add.append(item)
 
-        if keep_index and old_index is not None and len(task_list.children) > 0:
-            new_idx = min(old_index, len(task_list.children) - 1)
+        task_list.clear()
+        if items_to_add:
+            task_list.extend(items_to_add)
+
+        if keep_index and old_index is not None and len(items_to_add) > 0:
+            new_idx = min(old_index, len(items_to_add) - 1)
             task_list.index = new_idx
-        elif len(task_list) > 0:
-            for i, child in enumerate(task_list.children):
-                if isinstance(child, (TodoItem, CategoryItem)):
-                    task_list.index = i
-                    break
+        elif len(items_to_add) > 0:
+            task_list.index = 0
 
         self.update_header()
 
@@ -490,15 +487,7 @@ class EndtimeApp(App):
     def _swap_tags(self, tag: str, direction: int) -> bool:
         if tag == "CLEARED":
             return False
-        task_list = None
-        for screen in getattr(self, "screen_stack", []) + [getattr(self, "screen", None)]:
-            if screen is None:
-                continue
-            try:
-                task_list = screen.query_one("#task-list", ListView)
-                break
-            except Exception:
-                continue
+        task_list = self._get_task_list()
         if task_list is None:
             return False
 
