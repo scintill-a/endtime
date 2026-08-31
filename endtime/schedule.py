@@ -130,16 +130,15 @@ def format_schedule_badge(scheduled_dt: datetime, now: Optional[datetime] = None
         # Overdue
         abs_diff = int(abs(diff))
         if abs_diff < 3600:
-            late_str = f"{abs_diff // 60}m"
+            return f"[#ff4444][b]⏰ [OVERDUE] ({abs_diff // 60}m)[/b][/]"
         elif abs_diff < 86400:
-            late_str = f"{abs_diff // 3600}h"
+            return f"[#ff4444][b]⏰ [OVERDUE] ({abs_diff // 3600}h)[/b][/]"
         else:
-            late_str = f"{scheduled_dt.strftime('%b %d')}"
-        return f"[bold #ffffff on #ff4444] OVERDUE [/] [#ff6666]({late_str})[/]"
+            return f"[#ff4444][b]⏰ [OVERDUE] ({scheduled_dt.strftime('%b %d')})[/b][/]"
     elif diff < 0:
-        return "[bold #ffffff on #ff4444] DUE NOW [/]"
+        return "[#ff4444][b]⏰ [DUE NOW][/b][/]"
     elif diff < 60:
-        return "[#ff6666][b]⏰ in <1m[/b][/]"
+        return "[#ff4444][b]⏰ in <1m[/b][/]"
     elif diff < 3600:
         mins = int(diff // 60)
         return f"[#666666]⏰[/] [#888888]in {mins}m[/]"

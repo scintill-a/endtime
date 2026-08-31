@@ -85,7 +85,7 @@ class TestSchedule(unittest.TestCase):
 
         # overdue by 20m
         badge2 = format_schedule_badge(datetime(2026, 8, 31, 13, 40, 0), now=now)
-        self.assertIn("OVERDUE", badge2)
+        self.assertIn("[OVERDUE]", badge2)
         self.assertIn("20m", badge2)
 
     def test_is_task_overdue(self):

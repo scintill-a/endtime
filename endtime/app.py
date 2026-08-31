@@ -39,7 +39,7 @@ def format_progress_gauge(completed: int, total: int, width: int = 8) -> str:
     bar_empty = "░" * empty
     if ratio == 1.0:
         return f"[#ffffff][{bar_fill}][/] 100%"
-    return f"[#ff4444][{bar_fill}[#333333]{bar_empty}[/]][/] [#888888]{pct}%[/]"
+    return f"[#ffffff][{bar_fill}[#333333]{bar_empty}[/]][/] [#888888]{pct}%[/]"
 
 
 def copy_to_clipboard_system(app: App, text: str) -> None:

@@ -229,7 +229,7 @@ class TestEndtimeIntegration(unittest.TestCase):
 
         gauge_mid = format_progress_gauge(5, 10)
         self.assertIn("50%", gauge_mid)
-        self.assertIn("#ff4444", gauge_mid)
+        self.assertIn("#ffffff", gauge_mid)
 
         gauge_full = format_progress_gauge(10, 10)
         self.assertIn("100%", gauge_full)
