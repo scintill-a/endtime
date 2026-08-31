@@ -121,7 +121,7 @@ class SessionOverlayModal(ModalScreen[Optional[str]]):
             if i < cycle_idx:
                 pills.append("[#ff4444]●[/]")
             elif i == cycle_idx:
-                pills.append("[#ff4444]●[/]" if self.app.session.is_break else "[#ffffff][b]●[/b][/]")
+                pills.append("[#ffffff][b]●[/b][/]")
             else:
                 pills.append("[#333333]○[/]")
         return "Cycles: " + " ".join(pills)
@@ -159,7 +159,7 @@ class SessionOverlayModal(ModalScreen[Optional[str]]):
         except Exception:
             pass
 
-    def _safe_dismiss(self, result: Optional[str] = None) -> None:
+    def _safe_dismiss(self, result=None) -> None:
         if self._tick_interval is not None:
             try:
                 self._tick_interval.stop()
@@ -167,7 +167,10 @@ class SessionOverlayModal(ModalScreen[Optional[str]]):
                 pass
             self._tick_interval = None
         try:
-            if getattr(self.app, "screen", None) is self:
+            stack = getattr(self.app, "_screen_stack", [])
+            if stack and stack[-1] is self:
+                self.dismiss(result)
+            elif getattr(self.app, "screen", None) is self:
                 self.dismiss(result)
         except Exception:
             pass

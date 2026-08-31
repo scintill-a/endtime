@@ -2,7 +2,6 @@
 from typing import Optional
 from datetime import datetime, timedelta, time
 from textual.app import ComposeResult
-from textual.binding import Binding
 from textual.screen import ModalScreen
 from textual.widgets import Label, Static, Input
 from endtime.schedule import parse_schedule_string
@@ -11,23 +10,10 @@ from endtime.schedule import parse_schedule_string
 class ScheduleModal(ModalScreen[Optional[datetime]]):
     """Floating modal dialog to schedule a reminder or due date for a task."""
 
-    can_focus = True
-
-    BINDINGS = [
-        Binding("j", "cursor_down", "Down", show=False),
-        Binding("k", "cursor_up", "Up", show=False),
-        Binding("down", "cursor_down", "Down", show=False),
-        Binding("up", "cursor_up", "Up", show=False),
-        Binding("enter", "select_action", "Select", show=False),
-        Binding("space", "select_action", "Select", show=False),
-        Binding("escape", "cancel_action", "Cancel", show=False),
-        Binding("q", "cancel_action", "Cancel", show=False),
-    ]
-
     DEFAULT_CSS = """
     ScheduleModal {
         align: center middle;
-        background: rgba(0, 0, 0, 0.85);
+        background: rgba(0, 0, 0, 0.82);
     }
 
     #schedule-card {
@@ -35,7 +21,7 @@ class ScheduleModal(ModalScreen[Optional[datetime]]):
         height: auto;
         align: center middle;
         padding: 1 2;
-        border: solid #333333;
+        border: solid #2a2a2a;
         background: #090909;
     }
 
@@ -55,7 +41,7 @@ class ScheduleModal(ModalScreen[Optional[datetime]]):
     }
 
     .modal-option {
-        color: #888888;
+        color: #aaaaaa;
         width: 100%;
         height: 1;
     }
@@ -103,12 +89,19 @@ class ScheduleModal(ModalScreen[Optional[datetime]]):
             yield Label(f"{self.task_display[:38]}", classes="modal-subtitle")
             for i, (_, _) in enumerate(self.options):
                 yield Label("", id=f"opt-{i}", classes="modal-option")
-            yield Input(placeholder="e.g. 15:30, tomorrow 2pm, in 45m", id="custom-schedule-input")
+            yield Input(
+                placeholder="e.g. 15:30, tomorrow 2pm, in 45m",
+                id="custom-schedule-input",
+                disabled=True,
+            )
             yield Label("\\[1-6] select  \\[j/k] nav  \\[enter] confirm  \\[esc] cancel", classes="modal-hint")
 
     def on_mount(self) -> None:
-        self.focus()
         self._refresh_options()
+        # Keep input disabled/hidden to prevent it stealing focus from modal key handling
+        inp = self.query_one("#custom-schedule-input", Input)
+        inp.display = False
+        inp.disabled = True
 
     def _refresh_options(self) -> None:
         for i, (action, label_text) in enumerate(self.options):
@@ -126,48 +119,6 @@ class ScheduleModal(ModalScreen[Optional[datetime]]):
                         lbl.update(f"  [#888888]{label_text}[/]")
             except Exception:
                 pass
-
-    def action_cursor_down(self) -> None:
-        if not self.custom_mode:
-            self.selected_index = (self.selected_index + 1) % len(self.options)
-            self._refresh_options()
-
-    def action_cursor_up(self) -> None:
-        if not self.custom_mode:
-            self.selected_index = (self.selected_index - 1) % len(self.options)
-            self._refresh_options()
-
-    def action_select_action(self) -> None:
-        if self.custom_mode:
-            return
-        action = self.options[self.selected_index][0]
-        if action == "custom":
-            self._open_custom_input()
-        else:
-            self._safe_dismiss(self._resolve_selection(action))
-
-    def action_cancel_action(self) -> None:
-        if self.custom_mode:
-            self.custom_mode = False
-            try:
-                inp = self.query_one("#custom-schedule-input", Input)
-                inp.display = False
-            except Exception:
-                pass
-            self.focus()
-            self._refresh_options()
-        else:
-            self._safe_dismiss(None)
-
-    def _open_custom_input(self) -> None:
-        self.custom_mode = True
-        try:
-            inp = self.query_one("#custom-schedule-input", Input)
-            inp.display = True
-            inp.value = ""
-            inp.focus()
-        except Exception:
-            pass
 
     def _resolve_selection(self, action: str) -> Optional[datetime]:
         now = datetime.now()
@@ -189,9 +140,13 @@ class ScheduleModal(ModalScreen[Optional[datetime]]):
             return "CLEAR"  # Sentinel string for clearing schedule
         return None
 
-    def _safe_dismiss(self, result: Optional[datetime] = None) -> None:
+    def _safe_dismiss(self, result=None) -> None:
         try:
-            self.dismiss(result)
+            stack = getattr(self.app, "_screen_stack", [])
+            if stack and stack[-1] is self:
+                self.dismiss(result)
+            elif getattr(self.app, "screen", None) is self:
+                self.dismiss(result)
         except Exception:
             pass
 
@@ -207,29 +162,60 @@ class ScheduleModal(ModalScreen[Optional[datetime]]):
     def on_key(self, event) -> None:
         if self.custom_mode:
             if event.key == "escape":
-                self.action_cancel_action()
+                self.custom_mode = False
+                inp = self.query_one("#custom-schedule-input", Input)
+                inp.display = False
+                inp.disabled = True
+                self._refresh_options()
                 event.prevent_default()
             return
 
-        char = event.character or event.key
-        if char == "1":
+        if event.character == "j" or event.key == "down":
+            self.selected_index = (self.selected_index + 1) % len(self.options)
+            self._refresh_options()
+            event.prevent_default()
+        elif event.character == "k" or event.key == "up":
+            self.selected_index = (self.selected_index - 1) % len(self.options)
+            self._refresh_options()
+            event.prevent_default()
+        elif event.key in ("enter", "space"):
+            action = self.options[self.selected_index][0]
+            if action == "custom":
+                self.custom_mode = True
+                inp = self.query_one("#custom-schedule-input", Input)
+                inp.disabled = False
+                inp.display = True
+                inp.value = ""
+                inp.focus()
+            else:
+                self._safe_dismiss(self._resolve_selection(action))
+            event.prevent_default()
+        elif event.character == "1":
             self._safe_dismiss(self._resolve_selection("15m"))
             event.prevent_default()
-        elif char == "2":
+        elif event.character == "2":
             self._safe_dismiss(self._resolve_selection("30m"))
             event.prevent_default()
-        elif char == "3":
+        elif event.character == "3":
             self._safe_dismiss(self._resolve_selection("1h"))
             event.prevent_default()
-        elif char == "4":
+        elif event.character == "4":
             self._safe_dismiss(self._resolve_selection("evening"))
             event.prevent_default()
-        elif char == "5":
+        elif event.character == "5":
             self._safe_dismiss(self._resolve_selection("tomorrow"))
             event.prevent_default()
-        elif char == "6":
-            self._open_custom_input()
+        elif event.character == "6":
+            self.custom_mode = True
+            inp = self.query_one("#custom-schedule-input", Input)
+            inp.disabled = False
+            inp.display = True
+            inp.value = ""
+            inp.focus()
             event.prevent_default()
-        elif char in ("7", "c", "C") and self.is_scheduled:
+        elif event.character in ("7", "c", "C") and self.is_scheduled:
             self._safe_dismiss("CLEAR")
+            event.prevent_default()
+        elif event.key == "escape" or event.character in ("q", "Q"):
+            self._safe_dismiss(None)
             event.prevent_default()

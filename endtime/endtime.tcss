@@ -1,4 +1,4 @@
-/* Endtime - Minimalist Terminal HUD Stylesheet (Red / White / Gray / Black) */
+/* Endtime - Minimalist HUD Stylesheet — Strict palette: #000000 / #888888 / #ffffff / #ff4444 */
 
 Screen {
     background: #000000;
@@ -6,25 +6,24 @@ Screen {
     layout: vertical;
     scrollbar-color: #222222;
     scrollbar-color-active: #ff4444;
-    scrollbar-color-hover: #ff6666;
-    scrollbar-background: #050505;
+    scrollbar-color-hover: #555555;
+    scrollbar-background: #000000;
     scrollbar-size-vertical: 1;
 }
 
 ModalScreen, SessionPickerModal, SessionOverlayModal, ScheduleModal, ReminderModal, HelpModal {
-    background: rgba(0, 0, 0, 0.85);
+    background: rgba(0, 0, 0, 0.82);
     align: center middle;
 }
 
 #header {
     dock: top;
     width: 100%;
-    height: auto;
-    background: #050505;
-    color: #888888;
+    height: 1;
+    background: #090909;
+    color: #555555;
     padding: 0 1;
     border-bottom: solid #1c1c1c;
-    margin-bottom: 1;
 }
 
 #task-list {
@@ -33,7 +32,7 @@ ModalScreen, SessionPickerModal, SessionOverlayModal, ScheduleModal, ReminderMod
     overflow-x: hidden;
     scrollbar-color: #222222;
     scrollbar-color-active: #ff4444;
-    scrollbar-color-hover: #ff6666;
+    scrollbar-color-hover: #555555;
     scrollbar-background: #000000;
     padding: 0 1;
 }
@@ -63,7 +62,7 @@ CategoryItem.--highlight {
 TodoItem {
     layout: horizontal;
     background: #000000;
-    color: #ffffff;
+    color: #aaaaaa;
     padding-left: 0;
     padding-right: 0;
     height: auto;
@@ -88,52 +87,57 @@ TodoItem:focus Label {
 }
 
 TodoItem.--highlight {
-    background: #111111;
+    background: #0f0f0f;
 }
 
 TodoItem.-completed Label {
-    color: #444444;
+    color: #333333;
     text-style: strike;
 }
 
 #bottom-bar {
     dock: bottom;
-    height: 1;
-    background: #050505;
+    height: 3;
+    background: #090909;
+    border-top: solid #1c1c1c;
+    layout: horizontal;
+    align: left middle;
     padding: 0 1;
-    margin: 0;
 }
 
 #prompt-prefix {
     width: 2;
     height: 1;
     color: #ff4444;
+    content-align: left middle;
 }
 
 #prompt-label {
     height: 1;
-    color: #888888;
+    color: #666666;
+    content-align: left middle;
 }
 
 #task-input {
-    background: #050505;
+    background: #090909;
     color: #ffffff;
     border: none;
     padding: 0;
     margin: 0;
-    height: 1;
     width: 1fr;
+    height: 1;
 }
 
 #task-input:focus {
     border: none;
+    background: #090909;
 }
 
 #task-input > .input--placeholder {
-    color: #444444;
+    color: #333333;
 }
 
 #task-input > .input--cursor {
+    color: #ffffff;
     background: #ff4444;
-    color: #000000;
 }

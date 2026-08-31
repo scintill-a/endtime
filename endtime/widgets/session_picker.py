@@ -1,7 +1,6 @@
 """Session picker popup modal for Endtime TUI."""
 from typing import Optional, Dict, Any
 from textual.app import ComposeResult
-from textual.binding import Binding
 from textual.screen import ModalScreen
 from textual.widgets import Label, Static
 from endtime.models import format_duration
@@ -10,32 +9,19 @@ from endtime.models import format_duration
 class SessionPickerModal(ModalScreen[Optional[str]]):
     """Floating modal dialog to start or continue a Pomodoro, Break, or Stopwatch session."""
 
-    can_focus = True
-
-    BINDINGS = [
-        Binding("j", "cursor_down", "Down", show=False),
-        Binding("k", "cursor_up", "Up", show=False),
-        Binding("down", "cursor_down", "Down", show=False),
-        Binding("up", "cursor_up", "Up", show=False),
-        Binding("enter", "select_action", "Select", show=False),
-        Binding("space", "select_action", "Select", show=False),
-        Binding("escape", "cancel_action", "Cancel", show=False),
-        Binding("q", "cancel_action", "Cancel", show=False),
-    ]
-
     DEFAULT_CSS = """
     SessionPickerModal {
         align: center middle;
-        background: rgba(0, 0, 0, 0.85);
+        background: rgba(0, 0, 0, 0.75);
     }
 
     #picker-card {
-        width: 44;
-        height: auto;
-        align: center middle;
-        padding: 1 2;
-        border: solid #333333;
-        background: #090909;
+    width: 44;
+    height: auto;
+    align: center middle;
+    padding: 1 2;
+    border: solid #2a2a2a;
+    background: #090909;
     }
 
     .modal-title {
@@ -54,7 +40,7 @@ class SessionPickerModal(ModalScreen[Optional[str]]):
     }
 
     .modal-option {
-        color: #888888;
+        color: #aaaaaa;
         width: 100%;
         height: 1;
     }
@@ -105,7 +91,6 @@ class SessionPickerModal(ModalScreen[Optional[str]]):
             yield Label("\\[j/k] nav  \\[enter] select  \\[q/esc] cancel", classes="modal-hint")
 
     def on_mount(self) -> None:
-        self.focus()
         self._refresh_options()
 
     def _refresh_options(self) -> None:
@@ -113,55 +98,62 @@ class SessionPickerModal(ModalScreen[Optional[str]]):
             try:
                 lbl = self.query_one(f"#opt-{i}", Label)
                 if i == self.selected_index:
-                    if action == "discard":
+                    if action == "continue":
+                        lbl.update(f"[#ff4444]>[/] [#ffffff][b]{label_text}[/b][/]")
+                    elif action == "discard":
                         lbl.update(f"[#ff4444]>[/] [#ff4444][b]{label_text}[/b][/]")
                     else:
                         lbl.update(f"[#ff4444]>[/] [#ffffff][b]{label_text}[/b][/]")
                 else:
-                    if action == "discard":
+                    if action == "continue":
+                        lbl.update(f"  [#aaaaaa]{label_text}[/]")
+                    elif action == "discard":
                         lbl.update(f"  [#883333]{label_text}[/]")
                     else:
                         lbl.update(f"  [#888888]{label_text}[/]")
             except Exception:
                 pass
 
-    def action_cursor_down(self) -> None:
-        self.selected_index = (self.selected_index + 1) % len(self.options)
-        self._refresh_options()
-
-    def action_cursor_up(self) -> None:
-        self.selected_index = (self.selected_index - 1) % len(self.options)
-        self._refresh_options()
-
-    def action_select_action(self) -> None:
-        self._safe_dismiss(self.options[self.selected_index][0])
-
-    def action_cancel_action(self) -> None:
-        self._safe_dismiss(None)
-
-    def _safe_dismiss(self, result: Optional[str] = None) -> None:
+    def _safe_dismiss(self, result=None) -> None:
         try:
-            self.dismiss(result)
+            stack = getattr(self.app, "_screen_stack", [])
+            if stack and stack[-1] is self:
+                self.dismiss(result)
+            elif getattr(self.app, "screen", None) is self:
+                self.dismiss(result)
         except Exception:
             pass
 
     def on_key(self, event) -> None:
-        char = event.character or event.key
-        if char in ("0", "c", "C") and self.saved_session:
+        if event.character == "j" or event.key == "down":
+            self.selected_index = (self.selected_index + 1) % len(self.options)
+            self._refresh_options()
+            event.prevent_default()
+        elif event.character == "k" or event.key == "up":
+            self.selected_index = (self.selected_index - 1) % len(self.options)
+            self._refresh_options()
+            event.prevent_default()
+        elif event.key in ("enter", "space"):
+            self._safe_dismiss(self.options[self.selected_index][0])
+            event.prevent_default()
+        elif event.character in ("0", "c", "C") and self.saved_session:
             self._safe_dismiss("continue")
             event.prevent_default()
-        elif char == "1":
+        elif event.character == "1":
             self._safe_dismiss("pomodoro")
             event.prevent_default()
-        elif char == "2":
+        elif event.character == "2":
             self._safe_dismiss("short_break")
             event.prevent_default()
-        elif char == "3":
+        elif event.character == "3":
             self._safe_dismiss("long_break")
             event.prevent_default()
-        elif char == "4":
+        elif event.character == "4":
             self._safe_dismiss("stopwatch")
             event.prevent_default()
-        elif char in ("d", "D") and self.saved_session:
+        elif event.character in ("d", "D") and self.saved_session:
             self._safe_dismiss("discard")
+            event.prevent_default()
+        elif event.key == "escape" or event.character in ("q", "Q"):
+            self._safe_dismiss(None)
             event.prevent_default()
