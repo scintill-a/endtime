@@ -433,13 +433,19 @@ class EndtimeApp(App):
         self.schedule_target_id = None
         self.update_header()
 
-        self.query_one("#task-input", Input).display = False
-        lbl = self.query_one("#prompt-label", Label)
-        lbl.display = True
-        lbl.update("AWAITING TASK...")
+        try:
+            self.query_one("#task-input", Input).display = False
+            lbl = self.query_one("#prompt-label", Label)
+            lbl.display = True
+            lbl.update("AWAITING TASK...")
+        except Exception:
+            pass
 
         self.refresh_list(keep_index=True)
-        self.query_one("#task-list", ListView).focus()
+        try:
+            self.query_one("#task-list", ListView).focus()
+        except Exception:
+            pass
 
     def action_cursor_down(self):
         if self.mode == "NORMAL":
@@ -666,7 +672,7 @@ class EndtimeApp(App):
             ]
             self.save_tasks()
             self.refresh_list(keep_index=True)
-            self.show_toast(f"[#ffffff]✓ SWEPT {count} TASK{'S' if count != 1 else ''}[/]")
+            self.show_toast(f"[#ffffff]✓ SWEPT {count} COMPLETED TASKS[/]")
             self.action_normal_mode()
         elif self.mode == "CONFIRM_RESET" and self.pending_reset_id:
             for t in self.tasks_data:
@@ -675,7 +681,7 @@ class EndtimeApp(App):
                     break
             self.save_tasks()
             self.refresh_list(keep_index=True)
-            self.show_toast("[#888888]✓ TIMER RESET[/]")
+            self.show_toast("[#ffffff]✓ TIMER RESET TO 0s[/]")
             self.action_normal_mode()
 
     def action_yank(self):
@@ -692,7 +698,7 @@ class EndtimeApp(App):
                     task_data = self.get_task_by_id(item.task_id)
                     if task_data:
                         text_to_copy = task_data["text"]
-                        msg = "[#ffffff]✓ COPIED TO CLIPBOARD[/]"
+                        msg = "[#ffffff]✓ COPIED TASK TO CLIPBOARD[/]"
                 elif isinstance(item, CategoryItem):
                     tag_name = item.tag
                     if tag_name == "CLEARED":
@@ -705,7 +711,7 @@ class EndtimeApp(App):
                     if matching:
                         text_to_copy = "\n".join(matching)
                         count_label = f"{len(matching)} TASK{'S' if len(matching)>1 else ''}"
-                        msg = f"[#ffffff]✓ COPIED {count_label} ({tag_name})[/]"
+                        msg = f"[#ffffff]✓ COPIED {count_label} ({tag_name}) TO CLIPBOARD[/]"
                     else:
                         msg = f"[#888888]NO TASKS IN {tag_name} TO COPY[/]"
 
@@ -791,7 +797,7 @@ class EndtimeApp(App):
         elif isinstance(result, datetime):
             self.scheduler.set_schedule(self.schedule_target_id, result)
             badge = format_schedule_badge(result)
-            self.show_toast(f"[#ff4444]✓ SCHEDULED: {badge}[/]")
+            self.show_toast(f"[#ffffff]✓ SCHEDULED: {badge}[/]")
 
         self.schedule_target_id = None
 

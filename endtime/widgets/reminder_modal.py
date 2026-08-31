@@ -1,5 +1,4 @@
 """Floating reminder popup alert modal for Endtime TUI."""
-from typing import Optional
 from textual.app import ComposeResult
 from textual.screen import ModalScreen
 from textual.widgets import Label, Static
@@ -12,7 +11,7 @@ class ReminderModal(ModalScreen[None]):
     DEFAULT_CSS = """
     ReminderModal {
         align: center middle;
-        background: rgba(0, 0, 0, 0.82);
+        background: rgba(0, 0, 0, 0.85);
     }
 
     #reminder-card {
@@ -66,47 +65,46 @@ class ReminderModal(ModalScreen[None]):
             yield Label(f"\"{self.task_display[:42]}\"", classes="reminder-task")
             yield Label("SCHEDULED TIME HAS ARRIVED", classes="reminder-status")
             yield Label(
-                "[#ffffff][b]\\[w][/] Start Pomodoro    [#aaaaaa][b]\\[1][/] Snooze 10m\n"
-                "[#aaaaaa][b]\\[2][/] Snooze 30m       [#aaaaaa][b]\\[3][/] Snooze 1h\n"
-                "[#ffffff][b]\\[x][/] Mark Done        [#777777]\\[enter/esc] Dismiss[/]",
+                "[#ffffff][b]\\[w][/] Start Pomodoro    [#ffffff][b]\\[1][/] Snooze 10m\n"
+                "[#ffffff][b]\\[2][/] Snooze 30m       [#ffffff][b]\\[3][/] Snooze 1h\n"
+                "[#ff4444][b]\\[x][/] Mark Done        [#777777]\\[enter/esc] Dismiss[/]",
                 classes="reminder-actions",
                 markup=True,
             )
 
+    def on_mount(self) -> None:
+        self.focus()
+
     def _safe_dismiss(self) -> None:
-        try:
-            stack = getattr(self.app, "_screen_stack", [])
-            if stack and stack[-1] is self:
-                self.dismiss()
-            elif getattr(self.app, "screen", None) is self:
-                self.dismiss()
-        except Exception:
-            pass
+        self.dismiss()
 
     def on_key(self, event) -> None:
-        if event.character in ("w", "W"):
+        key = getattr(event, "key", "").lower()
+        char = getattr(event, "character", "")
+
+        if key == "w" or char in ("w", "W"):
             self._safe_dismiss()
             if hasattr(self.app, "session") and hasattr(self.app, "push_screen"):
                 from endtime.widgets.session_overlay import SessionOverlayModal
                 self.app.session.start_session(self.task_id, SessionType.POMODORO, duration=25 * 60)
                 self.app.push_screen(SessionOverlayModal(self.task_display, "P O M O D O R O"))
             event.prevent_default()
-        elif event.character == "1":
+        elif key == "1" or char == "1":
             if hasattr(self.app, "scheduler"):
                 self.app.scheduler.snooze_task(self.task_id, minutes=10)
             self._safe_dismiss()
             event.prevent_default()
-        elif event.character == "2":
+        elif key == "2" or char == "2":
             if hasattr(self.app, "scheduler"):
                 self.app.scheduler.snooze_task(self.task_id, minutes=30)
             self._safe_dismiss()
             event.prevent_default()
-        elif event.character == "3":
+        elif key == "3" or char == "3":
             if hasattr(self.app, "scheduler"):
                 self.app.scheduler.snooze_task(self.task_id, minutes=60)
             self._safe_dismiss()
             event.prevent_default()
-        elif event.character in ("x", "X"):
+        elif key == "x" or char in ("x", "X"):
             task_dict = self.app.get_task_by_id(self.task_id) if hasattr(self.app, "get_task_by_id") else None
             if task_dict:
                 from datetime import datetime
@@ -118,6 +116,6 @@ class ReminderModal(ModalScreen[None]):
                     self.app.refresh_list(keep_index=True)
             self._safe_dismiss()
             event.prevent_default()
-        elif event.key in ("enter", "space", "escape") or event.character in ("q", "Q"):
+        elif key in ("enter", "space", "escape", "q") or char in ("q", "Q"):
             self._safe_dismiss()
             event.prevent_default()

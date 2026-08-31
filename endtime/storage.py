@@ -87,12 +87,15 @@ class StorageManager:
             self._dirty_tasks = True
         if config:
             self._dirty_config = True
-        if self._save_timer is not None:
-            try:
-                self._save_timer.stop()
-            except Exception:
-                pass
-        self._save_timer = self.app.set_timer(0.3, self._flush_save)
+        try:
+            if self._save_timer is not None:
+                try:
+                    self._save_timer.stop()
+                except Exception:
+                    pass
+            self._save_timer = self.app.set_timer(0.3, self._flush_save)
+        except RuntimeError:
+            self._flush_save(immediate=True)
 
     def _flush_save(self, immediate: bool = False) -> None:
         """Flush dirty states to disk either immediately or via background thread workers."""

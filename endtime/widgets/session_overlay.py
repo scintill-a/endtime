@@ -23,7 +23,7 @@ class SessionOverlayModal(ModalScreen[Optional[str]]):
     DEFAULT_CSS = """
     SessionOverlayModal {
         align: center middle;
-        background: rgba(0, 0, 0, 0.75);
+        background: rgba(0, 0, 0, 0.85);
     }
 
     #overlay-card {
@@ -97,6 +97,7 @@ class SessionOverlayModal(ModalScreen[Optional[str]]):
             yield Label("", id="overlay-hints", markup=True)
 
     def on_mount(self) -> None:
+        self.focus()
         self._tick_interval = self.set_interval(0.5, self._on_tick)
         self._on_tick()
 
@@ -159,21 +160,14 @@ class SessionOverlayModal(ModalScreen[Optional[str]]):
         except Exception:
             pass
 
-    def _safe_dismiss(self, result=None) -> None:
+    def _safe_dismiss(self, result: Optional[str] = None) -> None:
         if self._tick_interval is not None:
             try:
                 self._tick_interval.stop()
             except Exception:
                 pass
             self._tick_interval = None
-        try:
-            stack = getattr(self.app, "_screen_stack", [])
-            if stack and stack[-1] is self:
-                self.dismiss(result)
-            elif getattr(self.app, "screen", None) is self:
-                self.dismiss(result)
-        except Exception:
-            pass
+        self.dismiss(result)
 
     def _on_tick(self) -> None:
         if hasattr(self.app, "session"):
@@ -205,43 +199,44 @@ class SessionOverlayModal(ModalScreen[Optional[str]]):
                 pass
 
     def on_key(self, event) -> None:
+        key = getattr(event, "key", "").lower()
+        char = getattr(event, "character", "")
+
         if hasattr(self.app, "session") and self.app.session.state in (SessionState.WAITING_BREAK, SessionState.WAITING_WORK):
-            if event.key in ("enter", "space") or event.character in ("n", "N"):
+            if key in ("enter", "space", "n") or char in ("n", "N"):
                 self.app.session.transition_next()
                 self._on_tick()
                 event.prevent_default()
                 return
-            elif event.character in ("s", "S"):
+            elif key == "s" or char in ("s", "S"):
                 self.app.session.stop_and_save(preserve_snapshot=True)
                 self._safe_dismiss("saved")
                 event.prevent_default()
                 return
-            elif event.key == "escape" or event.character in ("m", "M"):
-                # Minimize overlay to background
+            elif key in ("escape", "m") or char in ("m", "M"):
                 self._safe_dismiss("minimized")
                 event.prevent_default()
                 return
 
-        if event.character in ("p", "P") or event.key == "space":
+        if key in ("p", "space") or char in ("p", "P"):
             if hasattr(self.app, "session"):
                 self.app.session.toggle_pause()
                 self._on_tick()
             event.prevent_default()
-        elif event.character in ("m", "M") or event.key == "escape":
-            # Minimize to background without stopping/canceling timer
+        elif key in ("m", "escape") or char in ("m", "M"):
             self._safe_dismiss("minimized")
             event.prevent_default()
-        elif event.character in ("s", "S"):
+        elif key == "s" or char in ("s", "S"):
             if hasattr(self.app, "session"):
                 self.app.session.stop_and_save(preserve_snapshot=True)
             self._safe_dismiss("saved")
             event.prevent_default()
-        elif event.character in ("x", "X"):
+        elif key == "x" or char in ("x", "X"):
             if hasattr(self.app, "session"):
                 self.app.session.tick_and_save()
             self._safe_dismiss("ticked")
             event.prevent_default()
-        elif event.character in ("c", "C", "q", "Q"):
+        elif key in ("c", "q") or char in ("c", "C", "q", "Q"):
             if hasattr(self.app, "session"):
                 self.app.session.cancel_session()
             self._safe_dismiss("cancelled")

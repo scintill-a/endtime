@@ -13,7 +13,7 @@ class ScheduleModal(ModalScreen[Optional[datetime]]):
     DEFAULT_CSS = """
     ScheduleModal {
         align: center middle;
-        background: rgba(0, 0, 0, 0.82);
+        background: rgba(0, 0, 0, 0.85);
     }
 
     #schedule-card {
@@ -41,7 +41,7 @@ class ScheduleModal(ModalScreen[Optional[datetime]]):
     }
 
     .modal-option {
-        color: #aaaaaa;
+        color: #888888;
         width: 100%;
         height: 1;
     }
@@ -89,19 +89,12 @@ class ScheduleModal(ModalScreen[Optional[datetime]]):
             yield Label(f"{self.task_display[:38]}", classes="modal-subtitle")
             for i, (_, _) in enumerate(self.options):
                 yield Label("", id=f"opt-{i}", classes="modal-option")
-            yield Input(
-                placeholder="e.g. 15:30, tomorrow 2pm, in 45m",
-                id="custom-schedule-input",
-                disabled=True,
-            )
+            yield Input(placeholder="e.g. 15:30, tomorrow 2pm, in 45m", id="custom-schedule-input")
             yield Label("\\[1-6] select  \\[j/k] nav  \\[enter] confirm  \\[esc] cancel", classes="modal-hint")
 
     def on_mount(self) -> None:
         self._refresh_options()
-        # Keep input disabled/hidden to prevent it stealing focus from modal key handling
-        inp = self.query_one("#custom-schedule-input", Input)
-        inp.display = False
-        inp.disabled = True
+        self.focus()
 
     def _refresh_options(self) -> None:
         for i, (action, label_text) in enumerate(self.options):
@@ -140,82 +133,73 @@ class ScheduleModal(ModalScreen[Optional[datetime]]):
             return "CLEAR"  # Sentinel string for clearing schedule
         return None
 
-    def _safe_dismiss(self, result=None) -> None:
-        try:
-            stack = getattr(self.app, "_screen_stack", [])
-            if stack and stack[-1] is self:
-                self.dismiss(result)
-            elif getattr(self.app, "screen", None) is self:
-                self.dismiss(result)
-        except Exception:
-            pass
-
     def on_input_submitted(self, event: Input.Submitted) -> None:
         val = event.value.strip()
         if val:
             dt = parse_schedule_string(val)
             if dt:
-                self._safe_dismiss(dt)
+                self.dismiss(dt)
                 return
-        self._safe_dismiss(None)
+        self.dismiss(None)
 
     def on_key(self, event) -> None:
+        key = getattr(event, "key", "").lower()
+        char = getattr(event, "character", "")
+
         if self.custom_mode:
-            if event.key == "escape":
+            if key == "escape":
                 self.custom_mode = False
                 inp = self.query_one("#custom-schedule-input", Input)
                 inp.display = False
-                inp.disabled = True
                 self._refresh_options()
+                self.focus()
                 event.prevent_default()
             return
 
-        if event.character == "j" or event.key == "down":
+        if key in ("j", "down") or char == "j":
             self.selected_index = (self.selected_index + 1) % len(self.options)
             self._refresh_options()
             event.prevent_default()
-        elif event.character == "k" or event.key == "up":
+        elif key in ("k", "up") or char == "k":
             self.selected_index = (self.selected_index - 1) % len(self.options)
             self._refresh_options()
             event.prevent_default()
-        elif event.key in ("enter", "space"):
+        elif key in ("enter", "space"):
             action = self.options[self.selected_index][0]
             if action == "custom":
                 self.custom_mode = True
                 inp = self.query_one("#custom-schedule-input", Input)
-                inp.disabled = False
                 inp.display = True
                 inp.value = ""
                 inp.focus()
             else:
-                self._safe_dismiss(self._resolve_selection(action))
+                self.dismiss(self._resolve_selection(action))
             event.prevent_default()
-        elif event.character == "1":
-            self._safe_dismiss(self._resolve_selection("15m"))
+        elif key == "1" or char == "1":
+            self.dismiss(self._resolve_selection("15m"))
             event.prevent_default()
-        elif event.character == "2":
-            self._safe_dismiss(self._resolve_selection("30m"))
+        elif key == "2" or char == "2":
+            self.dismiss(self._resolve_selection("30m"))
             event.prevent_default()
-        elif event.character == "3":
-            self._safe_dismiss(self._resolve_selection("1h"))
+        elif key == "3" or char == "3":
+            self.dismiss(self._resolve_selection("1h"))
             event.prevent_default()
-        elif event.character == "4":
-            self._safe_dismiss(self._resolve_selection("evening"))
+        elif key == "4" or char == "4":
+            self.dismiss(self._resolve_selection("evening"))
             event.prevent_default()
-        elif event.character == "5":
-            self._safe_dismiss(self._resolve_selection("tomorrow"))
+        elif key == "5" or char == "5":
+            self.dismiss(self._resolve_selection("tomorrow"))
             event.prevent_default()
-        elif event.character == "6":
+        elif key == "6" or char == "6":
             self.custom_mode = True
             inp = self.query_one("#custom-schedule-input", Input)
-            inp.disabled = False
             inp.display = True
             inp.value = ""
             inp.focus()
             event.prevent_default()
-        elif event.character in ("7", "c", "C") and self.is_scheduled:
-            self._safe_dismiss("CLEAR")
+        elif (key in ("7", "c") or char in ("7", "c", "C")) and self.is_scheduled:
+            self.dismiss("CLEAR")
             event.prevent_default()
-        elif event.key == "escape" or event.character in ("q", "Q"):
-            self._safe_dismiss(None)
+        elif key in ("escape", "q") or char in ("q", "Q"):
+            self.dismiss(None)
             event.prevent_default()
