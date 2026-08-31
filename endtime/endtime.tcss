@@ -1,15 +1,18 @@
+/* Endtime - Cyberpunk Minimalist HUD Stylesheet */
+
 Screen {
     background: #000000;
-    color: #777777;
+    color: #888888;
     layout: vertical;
-    scrollbar-color: #333333;
+    scrollbar-color: #222222;
     scrollbar-color-active: #ff4444;
-    scrollbar-color-hover: #ff4444;
-    scrollbar-background: #000000;
+    scrollbar-color-hover: #ff6666;
+    scrollbar-background: #050505;
+    scrollbar-size-vertical: 1;
 }
 
-ModalScreen, SessionPickerModal, SessionOverlayModal {
-    background: rgba(0, 0, 0, 0.65);
+ModalScreen, SessionPickerModal, SessionOverlayModal, ScheduleModal, ReminderModal, HelpModal {
+    background: rgba(0, 0, 0, 0.80);
     align: center middle;
 }
 
@@ -17,8 +20,10 @@ ModalScreen, SessionPickerModal, SessionOverlayModal {
     dock: top;
     width: 100%;
     height: auto;
-    background: #000000;
-    color: #777777;
+    background: #050505;
+    color: #888888;
+    padding: 0 1;
+    border-bottom: solid #1c1c1c;
     margin-bottom: 1;
 }
 
@@ -26,10 +31,11 @@ ModalScreen, SessionPickerModal, SessionOverlayModal {
     background: #000000;
     height: 1fr;
     overflow-x: hidden;
-    scrollbar-color: #333333;
+    scrollbar-color: #222222;
     scrollbar-color-active: #ff4444;
-    scrollbar-color-hover: #ff4444;
+    scrollbar-color-hover: #ff6666;
     scrollbar-background: #000000;
+    padding: 0 1;
 }
 
 CategoryItem {
@@ -42,12 +48,16 @@ CategoryItem {
 }
 
 .category-label {
-    color: #333333;
+    color: #444444;
     text-style: bold;
 }
 
 CategoryItem:focus .category-label {
     color: #ffffff;
+}
+
+CategoryItem.--highlight {
+    background: #0d0d0d;
 }
 
 TodoItem {
@@ -60,8 +70,7 @@ TodoItem {
 }
 
 TodoItem:focus {
-    /* Focus doesn't alter styling anymore, handled by python formatting */
-    background: #000000;
+    background: #0a0a0a;
 }
 
 TodoItem:focus Label {
@@ -83,7 +92,7 @@ TodoItem.--highlight {
 }
 
 TodoItem.-completed Label {
-    color: #333333;
+    color: #383838;
     text-style: strike;
 }
 
@@ -91,7 +100,9 @@ TodoItem.-completed Label {
     dock: bottom;
     height: 1;
     margin-top: 1;
-    background: #000000;
+    background: #050505;
+    border-top: solid #1c1c1c;
+    padding: 0 1;
 }
 
 #prompt-prefix {
@@ -100,11 +111,11 @@ TodoItem.-completed Label {
 }
 
 #prompt-label {
-    color: #777777;
+    color: #888888;
 }
 
 #task-input {
-    background: #000000;
+    background: #050505;
     color: #ffffff;
     border: none;
     padding: 0;
@@ -116,5 +127,5 @@ TodoItem.-completed Label {
 }
 
 #task-input > .input--placeholder {
-    color: #333333;
+    color: #444444;
 }

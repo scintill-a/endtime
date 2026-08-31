@@ -1,7 +1,10 @@
 """Main TUI application controller for Endtime."""
+import os
 import uuid
+import shutil
+import subprocess
 from datetime import date, datetime
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
@@ -11,7 +14,7 @@ from textual.containers import Horizontal
 from endtime.models import parse_task
 from endtime.storage import StorageManager
 from endtime.habits import process_habits
-from endtime.schedule import ScheduleManager
+from endtime.schedule import ScheduleManager, format_schedule_badge
 from endtime.widgets import (
     CategoryItem,
     TodoItem,
@@ -24,11 +27,19 @@ from endtime.widgets import (
 from endtime.session import SessionManager, SessionType, SessionState
 
 
+def format_progress_gauge(completed: int, total: int, width: int = 8) -> str:
+    """Format a compact visual ASCII progress gauge."""
+    if total == 0:
+        return "[#333333][────────][/] 0%"
+    ratio = max(0.0, min(1.0, completed / total))
+    filled = int(round(ratio * width))
+    empty = width - filled
+    pct = int(round(ratio * 100))
+    bar_fill = "█" * filled
+    bar_empty = "░" * empty
+    gauge_color = "#00e5ff" if ratio == 1.0 else ("#ffaa00" if ratio >= 0.5 else "#ff4444")
+    return f"[{gauge_color}][{bar_fill}[#333333]{bar_empty}[/]][/] {pct}%"
 
-
-import os
-import shutil
-import subprocess
 
 def copy_to_clipboard_system(app: App, text: str) -> None:
     """Copy text using Textual's OSC 52 and desktop clipboard tools (wl-copy, xclip, xsel)."""
@@ -36,7 +47,7 @@ def copy_to_clipboard_system(app: App, text: str) -> None:
         app.copy_to_clipboard(text)
     except Exception:
         pass
-    
+
     if shutil.which("wl-copy") and os.environ.get("WAYLAND_DISPLAY"):
         try:
             res = subprocess.run(["wl-copy"], input=text.encode("utf-8"), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
@@ -63,7 +74,7 @@ def copy_to_clipboard_system(app: App, text: str) -> None:
 class EndtimeApp(App):
     """Endtime terminal user interface controller."""
     CSS_PATH = "endtime.tcss"
-    
+
     BINDINGS = [
         Binding("j", "cursor_down", "Down", show=False),
         Binding("k", "cursor_up", "Up", show=False),
@@ -74,6 +85,10 @@ class EndtimeApp(App):
         Binding("w", "work_session", "Work", show=False),
         Binding("at", "schedule_task", "Schedule", show=False),
         Binding("@", "schedule_task", "Schedule", show=False),
+        Binding("slash", "search_mode", "Search", show=False),
+        Binding("/", "search_mode", "Search", show=False),
+        Binding("question_mark", "toggle_help", "Help", show=False),
+        Binding("?", "toggle_help", "Help", show=False),
         Binding("enter", "toggle", "Toggle", show=False),
         Binding("d", "delete_task", "Delete", show=False),
         Binding("e", "edit_task", "Edit", show=False),
@@ -93,16 +108,18 @@ class EndtimeApp(App):
         self.storage = StorageManager(self)
         self.session = SessionManager(self)
         self.scheduler = ScheduleManager(self)
-        self.tasks_data = []
+        self.tasks_data: List[Dict[str, Any]] = []
         self.collapsed_tags = set()
         self.tag_order = []
         self.mode = "NORMAL"
+        self.search_query = ""
         self.session_target_id = None
         self.schedule_target_id = None
         self.editing_id = None
         self.pending_delete_id = None
         self.pending_reset_id = None
         self.previous_highlighted = None
+        self._toast_timer = None
 
     def on_key(self, event):
         if self.mode == "NORMAL":
@@ -161,15 +178,25 @@ class EndtimeApp(App):
 
         total = len(self.tasks_data)
         completed_count = sum(1 for t in self.tasks_data if t.get("completed", False))
-        
-        mode_color = "#ff4444" if self.mode == "NORMAL" else "#ffffff"
+
+        mode_color = "#ff4444" if self.mode == "NORMAL" else ("#00e5ff" if self.mode == "SEARCH" else "#ffffff")
         mode_display = self.mode
         if self.mode == "INSERT" and self.editing_id:
             mode_display = "EDIT"
-            
+
+        gauge = format_progress_gauge(completed_count, total)
         session_badge = self.session.get_header_badge() if hasattr(self, "session") else ""
-        help_tag = r"\[H] help"
-        header.update(f" [{mode_color}]{mode_display}[/] | {session_badge}{completed_count}/{total} | {help_tag}")
+        clock_str = datetime.now().strftime("%H:%M")
+
+        header_text = (
+            f" [#ff4444][b]ENDTIME[/b][/] [#333333]│[/] "
+            f"[{mode_color}][b]{mode_display}[/b][/] [#333333]│[/] "
+            f"{gauge} [#888888]({completed_count}/{total})[/] [#333333]│[/] "
+            f"{session_badge}"
+            f"[#666666]{clock_str}[/] [#333333]│[/] "
+            r"[#555555]\[?] help[/]"
+        )
+        header.update(header_text)
 
     def update_prompt(self, text: str):
         for screen in getattr(self, "screen_stack", [self.screen]):
@@ -181,6 +208,23 @@ class EndtimeApp(App):
                 break
             except Exception:
                 continue
+
+    def show_toast(self, message: str, duration: float = 2.5) -> None:
+        """Display a transient HUD notification banner in the prompt bar."""
+        if self._toast_timer is not None:
+            try:
+                self._toast_timer.stop()
+            except Exception:
+                pass
+            self._toast_timer = None
+
+        self.update_prompt(message)
+        self._toast_timer = self.set_timer(duration, self._clear_toast)
+
+    def _clear_toast(self) -> None:
+        self._toast_timer = None
+        if self.mode == "NORMAL":
+            self.update_prompt("AWAITING TASK...")
 
     def load_tasks(self):
         self.tasks_data = self.storage.load_tasks()
@@ -224,14 +268,19 @@ class EndtimeApp(App):
 
         task_list.clear()
         self.previous_highlighted = None
-        
+
         pending = [t for t in self.tasks_data if not t.get("completed", False)]
         completed = [t for t in self.tasks_data if t.get("completed", False)]
         completed.sort(
             key=lambda t: (parse_task(t["text"], t)[0] == "DAILY", t.get("completed_at", "")),
             reverse=True,
         )
-        
+
+        # Filter by search query if in search mode
+        if self.search_query:
+            pending = [t for t in pending if self.search_query in t.get("text", "").lower()]
+            completed = [t for t in completed if self.search_query in t.get("text", "").lower()]
+
         groups = {}
         for t in pending:
             tag, display_text = parse_task(t["text"], t)
@@ -257,13 +306,20 @@ class EndtimeApp(App):
                 if t not in self.tag_order:
                     self.tag_order.append(t)
         sorted_tags = ordered
-        
+
         for tag in sorted_tags:
             is_col = (tag in self.collapsed_tags)
-            count = len(groups[tag])
-            task_list.append(CategoryItem(tag, collapsed=is_col, count=count))
+            group_pending = groups[tag]
+            count = len(group_pending)
+            completed_in_tag = sum(
+                1 for t in self.tasks_data
+                if t.get("completed", False) and parse_task(t["text"], t)[0] == tag
+            )
+            total_in_tag = count + completed_in_tag
+            task_list.append(CategoryItem(tag, collapsed=is_col, count=total_in_tag, completed_count=completed_in_tag))
+
             if not is_col:
-                for t, display_text in groups[tag]:
+                for t, display_text in group_pending:
                     streak = t.get("streak", 0) if tag == "DAILY" else 0
                     focused = t.get("focused", False)
                     session_badge = (
@@ -289,7 +345,7 @@ class EndtimeApp(App):
         if completed:
             is_col = ("CLEARED" in self.collapsed_tags)
             count = len(completed)
-            task_list.append(CategoryItem("CLEARED", collapsed=is_col, count=count))
+            task_list.append(CategoryItem("CLEARED", collapsed=is_col, count=count, completed_count=count))
             if not is_col:
                 for t in completed:
                     tag, display_text = parse_task(t["text"], t)
@@ -315,7 +371,7 @@ class EndtimeApp(App):
                     )
                     item.add_class("-completed")
                     task_list.append(item)
-            
+
         if keep_index and old_index is not None and len(task_list.children) > 0:
             new_idx = min(old_index, len(task_list.children) - 1)
             task_list.index = new_idx
@@ -349,25 +405,43 @@ class EndtimeApp(App):
         self.mode = "INSERT"
         self.editing_id = None
         self.update_header()
-        
+
         self.query_one("#prompt-label", Label).display = False
         input_box = self.query_one("#task-input", Input)
+        input_box.placeholder = "[TAG] Task text @schedule"
+        input_box.display = True
+        input_box.value = ""
+        input_box.focus()
+
+    def action_search_mode(self):
+        if self.mode != "NORMAL":
+            return
+        self.mode = "SEARCH"
+        self.search_query = ""
+        self.update_header()
+
+        self.query_one("#prompt-label", Label).display = False
+        input_box = self.query_one("#task-input", Input)
+        input_box.placeholder = "search tasks..."
         input_box.display = True
         input_box.value = ""
         input_box.focus()
 
     def action_normal_mode(self):
         self.mode = "NORMAL"
+        self.search_query = ""
         self.editing_id = None
         self.pending_delete_id = None
         self.session_target_id = None
+        self.schedule_target_id = None
         self.update_header()
-        
+
         self.query_one("#task-input", Input).display = False
         lbl = self.query_one("#prompt-label", Label)
         lbl.display = True
         lbl.update("AWAITING TASK...")
-        
+
+        self.refresh_list(keep_index=True)
         self.query_one("#task-list", ListView).focus()
 
     def action_cursor_down(self):
@@ -387,7 +461,7 @@ class EndtimeApp(App):
             if t["id"] == task_id:
                 idx = i
                 break
-        
+
         if idx == -1:
             return False
 
@@ -398,7 +472,7 @@ class EndtimeApp(App):
         target_idx = -1
         step = 1 if direction == 1 else -1
         curr = idx + step
-        
+
         while 0 <= curr < len(self.tasks_data):
             other = self.tasks_data[curr]
             other_tag, _ = parse_task(other["text"], other)
@@ -513,7 +587,7 @@ class EndtimeApp(App):
                             elif not task_data["completed"] and today_str in completed_dates:
                                 completed_dates.remove(today_str)
                             task_data["completed_dates"] = completed_dates
-                            
+
                         self.schedule_save(tasks=True)
                         self.refresh_list(keep_index=True)
         elif self.mode in ("CONFIRM_DELETE", "CONFIRM_SWEEP", "CONFIRM_RESET"):
@@ -532,7 +606,7 @@ class EndtimeApp(App):
                         tag_to_toggle = "CLEARED"
                     else:
                         tag_to_toggle, _ = parse_task(item.original_text)
-                
+
                 if tag_to_toggle:
                     if tag_to_toggle in self.collapsed_tags:
                         self.collapsed_tags.remove(tag_to_toggle)
@@ -585,7 +659,7 @@ class EndtimeApp(App):
             if not completed:
                 return
             self.mode = "CONFIRM_SWEEP"
-            self.update_prompt("[#ff4444]SWEEP ALL CLEARED TASKS? (y/n)[/]")
+            self.update_prompt(f"[#ff4444]SWEEP ALL {len(completed)} CLEARED TASKS? (y/n)[/]")
             self.update_header()
 
     def action_confirm_yes(self):
@@ -593,14 +667,17 @@ class EndtimeApp(App):
             self.tasks_data = [t for t in self.tasks_data if t["id"] != self.pending_delete_id]
             self.save_tasks()
             self.refresh_list(keep_index=True)
+            self.show_toast("[#ff4444]✓ TASK DELETED[/]")
             self.action_normal_mode()
         elif self.mode == "CONFIRM_SWEEP":
+            count = sum(1 for t in self.tasks_data if t.get("completed", False) and parse_task(t["text"], t)[0] != "DAILY")
             self.tasks_data = [
                 t for t in self.tasks_data
                 if not t.get("completed", False) or parse_task(t["text"], t)[0] == "DAILY"
             ]
             self.save_tasks()
             self.refresh_list(keep_index=True)
+            self.show_toast(f"[#00e5ff]✓ SWEPT {count} COMPLETED TASKS[/]")
             self.action_normal_mode()
         elif self.mode == "CONFIRM_RESET" and self.pending_reset_id:
             for t in self.tasks_data:
@@ -609,6 +686,7 @@ class EndtimeApp(App):
                     break
             self.save_tasks()
             self.refresh_list(keep_index=True)
+            self.show_toast("[#ffaa00]✓ TIMER RESET TO 0s[/]")
             self.action_normal_mode()
 
     def action_yank(self):
@@ -625,7 +703,7 @@ class EndtimeApp(App):
                     task_data = self.get_task_by_id(item.task_id)
                     if task_data:
                         text_to_copy = task_data["text"]
-                        msg = "[#ff4444]COPIED TASK TO CLIPBOARD![/]"
+                        msg = "[#00e5ff]✓ COPIED TASK TO CLIPBOARD[/]"
                 elif isinstance(item, CategoryItem):
                     tag_name = item.tag
                     if tag_name == "CLEARED":
@@ -638,14 +716,14 @@ class EndtimeApp(App):
                     if matching:
                         text_to_copy = "\n".join(matching)
                         count_label = f"{len(matching)} TASK{'S' if len(matching)>1 else ''}"
-                        msg = f"[#ff4444]COPIED {count_label} ({tag_name}) TO CLIPBOARD![/]"
+                        msg = f"[#00e5ff]✓ COPIED {count_label} ({tag_name}) TO CLIPBOARD[/]"
                     else:
                         msg = f"[#ffaa00]NO TASKS IN {tag_name} TO COPY[/]"
 
                 if text_to_copy:
                     copy_to_clipboard_system(self, text_to_copy)
                 if msg:
-                    self.update_prompt(msg)
+                    self.show_toast(msg)
 
     def action_confirm_no(self):
         if self.mode in ("CONFIRM_DELETE", "CONFIRM_SWEEP", "CONFIRM_RESET"):
@@ -660,7 +738,7 @@ class EndtimeApp(App):
                     self.mode = "INSERT"
                     self.editing_id = item.task_id
                     self.update_header()
-                    
+
                     self.query_one("#prompt-label", Label).display = False
                     input_box = self.query_one("#task-input", Input)
                     input_box.display = True
@@ -668,7 +746,16 @@ class EndtimeApp(App):
                     input_box.focus()
                     input_box.action_end()
 
+    def on_input_changed(self, event: Input.Changed) -> None:
+        if self.mode == "SEARCH":
+            self.search_query = event.value.strip().lower()
+            self.refresh_list(keep_index=False)
+
     def on_input_submitted(self, event: Input.Submitted) -> None:
+        if self.mode == "SEARCH":
+            self.action_normal_mode()
+            return
+
         text = event.value.strip()
         if text:
             if self.editing_id:
@@ -711,11 +798,11 @@ class EndtimeApp(App):
 
         if result == "CLEAR":
             self.scheduler.clear_schedule(self.schedule_target_id)
-            self.update_prompt("[#ff4444]SCHEDULE CLEARED[/]")
+            self.show_toast("[#ff4444]✓ SCHEDULE CLEARED[/]")
         elif isinstance(result, datetime):
             self.scheduler.set_schedule(self.schedule_target_id, result)
-            from endtime.schedule import format_schedule_badge
-            self.update_prompt(f"[#ffaa00]SCHEDULED: {format_schedule_badge(result)}[/]")
+            badge = format_schedule_badge(result)
+            self.show_toast(f"[#ffaa00]✓ SCHEDULED: {badge}[/]")
 
         self.schedule_target_id = None
 
@@ -755,6 +842,7 @@ class EndtimeApp(App):
         elif result == "discard":
             self.session.clear_saved_session(self.session_target_id)
             self.refresh_list(keep_index=True)
+            self.show_toast("[#ff4444]✓ SAVED SESSION DISCARDED[/]")
         elif result == "pomodoro":
             self.session.start_session(self.session_target_id, SessionType.POMODORO, duration=25 * 60)
             self.push_screen(SessionOverlayModal(task_display, "P O M O D O R O"))
@@ -769,8 +857,6 @@ class EndtimeApp(App):
             self.push_screen(SessionOverlayModal(task_display, "S T O P W A T C H"))
 
         self.session_target_id = None
-
-
 
 
 def main():
