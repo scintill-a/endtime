@@ -5,7 +5,7 @@ from endtime.models import format_accumulated_time
 
 
 class TodoItem(ListItem):
-    """Represents an individual task item with split status and content labels."""
+    """Represents an individual task item with status and content labels."""
 
     def __init__(
         self,
@@ -16,6 +16,7 @@ class TodoItem(ListItem):
         streak: int = 0,
         focused: bool = False,
         session_badge: str = "",
+        schedule_badge: str = "",
         time_spent_seconds: int = 0,
         **kwargs,
     ):
@@ -27,6 +28,7 @@ class TodoItem(ListItem):
         self.streak = streak
         self.focused = focused
         self.session_badge = session_badge
+        self.schedule_badge = schedule_badge
         self.time_spent_seconds = time_spent_seconds
         self.is_highlighted = False
         self._status_label = None
@@ -34,7 +36,7 @@ class TodoItem(ListItem):
 
     def _get_status_text(self, is_high: bool) -> str:
         prefix = "[#ff4444]>[/] " if is_high else "  "
-        status = r"[#ff4444]\[X][/]" if self.completed else r"[#ffffff]\[ ][/]"
+        status = r"[#ff4444]\[✓][/]" if self.completed else r"[#ffffff]\[ ][/]"
         return f"{prefix}{status} "
 
     def _get_content_text(self) -> str:
@@ -42,14 +44,20 @@ class TodoItem(ListItem):
         content_text = self.display_text
         if self.focused and not self.completed:
             content_text = f"[#ff4444][b]{content_text}[/b][/]"
-            
+
+        # Schedule badge (e.g. ⏰ in 15m)
+        sched_text = f" {self.schedule_badge}" if (self.schedule_badge and not self.completed) else ""
+
+        # Session badge (e.g. [P 14:20] or [⏸ P 14:20])
         badge_text = f" [#ff4444][b]{self.session_badge}[/b][/]" if self.session_badge else ""
+
+        # Accumulated time (e.g. 1h 24m)
         time_text = (
-            f" [#888888]({format_accumulated_time(self.time_spent_seconds)})[/]"
+            f" [#666666]({format_accumulated_time(self.time_spent_seconds)})[/]"
             if not self.session_badge and self.time_spent_seconds > 0
             else ""
         )
-        return f"{content_text}{streak_text}{badge_text}{time_text}"
+        return f"{content_text}{streak_text}{sched_text}{badge_text}{time_text}"
 
     def compose(self) -> ComposeResult:
         self._status_label = Label(
@@ -80,6 +88,7 @@ class TodoItem(ListItem):
         display_text: str = None,
         original_text: str = None,
         session_badge: str = None,
+        schedule_badge: str = None,
         time_spent_seconds: int = None,
     ):
         """Update task properties in place and refresh DOM labels without rebuilding."""
@@ -99,9 +108,11 @@ class TodoItem(ListItem):
             self.original_text = original_text
         if session_badge is not None:
             self.session_badge = session_badge
+        if schedule_badge is not None:
+            self.schedule_badge = schedule_badge
         if time_spent_seconds is not None:
             self.time_spent_seconds = time_spent_seconds
-            
+
         if self._status_label is not None:
             self._status_label.update(self._get_status_text(self.is_highlighted))
         if self._content_label is not None:

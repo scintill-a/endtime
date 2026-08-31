@@ -11,7 +11,16 @@ from textual.containers import Horizontal
 from endtime.models import parse_task
 from endtime.storage import StorageManager
 from endtime.habits import process_habits
-from endtime.widgets import CategoryItem, TodoItem, SessionPickerModal, SessionOverlayModal, HelpModal
+from endtime.schedule import ScheduleManager
+from endtime.widgets import (
+    CategoryItem,
+    TodoItem,
+    SessionPickerModal,
+    SessionOverlayModal,
+    ScheduleModal,
+    ReminderModal,
+    HelpModal,
+)
 from endtime.session import SessionManager, SessionType, SessionState
 
 
@@ -63,6 +72,8 @@ class EndtimeApp(App):
         Binding("space", "toggle", "Toggle", show=False),
         Binding("f", "toggle_focus", "Focus", show=False),
         Binding("w", "work_session", "Work", show=False),
+        Binding("at", "schedule_task", "Schedule", show=False),
+        Binding("@", "schedule_task", "Schedule", show=False),
         Binding("enter", "toggle", "Toggle", show=False),
         Binding("d", "delete_task", "Delete", show=False),
         Binding("e", "edit_task", "Edit", show=False),
@@ -81,11 +92,13 @@ class EndtimeApp(App):
         super().__init__()
         self.storage = StorageManager(self)
         self.session = SessionManager(self)
+        self.scheduler = ScheduleManager(self)
         self.tasks_data = []
         self.collapsed_tags = set()
         self.tag_order = []
         self.mode = "NORMAL"
         self.session_target_id = None
+        self.schedule_target_id = None
         self.editing_id = None
         self.pending_delete_id = None
         self.pending_reset_id = None
@@ -128,7 +141,12 @@ class EndtimeApp(App):
         self.load_collapsed_tags()
         self.load_tag_order()
         self.load_tasks()
+        self.scheduler.start_ticker()
         self.action_normal_mode()
+
+    def on_unmount(self) -> None:
+        self.scheduler.stop_ticker()
+        self.storage._flush_save(immediate=True)
 
     def update_header(self):
         header = None
@@ -149,8 +167,9 @@ class EndtimeApp(App):
         if self.mode == "INSERT" and self.editing_id:
             mode_display = "EDIT"
             
+        session_badge = self.session.get_header_badge() if hasattr(self, "session") else ""
         help_tag = r"\[H] help"
-        header.update(f" [{mode_color}]{mode_display}[/] | {completed_count}/{total} | {help_tag}")
+        header.update(f" [{mode_color}]{mode_display}[/] | {session_badge}{completed_count}/{total} | {help_tag}")
 
     def update_prompt(self, text: str):
         for screen in getattr(self, "screen_stack", [self.screen]):
@@ -183,9 +202,6 @@ class EndtimeApp(App):
 
     def schedule_save(self, tasks: bool = False, config: bool = False):
         self.storage.schedule_save(tasks=tasks, config=config)
-
-    def on_unmount(self) -> None:
-        self.storage._flush_save(immediate=True)
 
     def refresh_list(self, keep_index=True):
         task_list = None
@@ -255,8 +271,19 @@ class EndtimeApp(App):
                         if getattr(self, "session", None) and self.session.active_task_id == t["id"]
                         else self.session.get_saved_badge_text(t) if getattr(self, "session", None) else ""
                     )
+                    sched_badge = self.scheduler.get_schedule_badge(t) if getattr(self, "scheduler", None) else ""
                     time_spent = t.get("time_spent_seconds", 0)
-                    item = TodoItem(t["id"], t["text"], display_text, t["completed"], streak, focused, session_badge=session_badge, time_spent_seconds=time_spent)
+                    item = TodoItem(
+                        t["id"],
+                        t["text"],
+                        display_text,
+                        t["completed"],
+                        streak,
+                        focused,
+                        session_badge=session_badge,
+                        schedule_badge=sched_badge,
+                        time_spent_seconds=time_spent,
+                    )
                     task_list.append(item)
 
         if completed:
@@ -273,8 +300,19 @@ class EndtimeApp(App):
                         if getattr(self, "session", None) and self.session.active_task_id == t["id"]
                         else self.session.get_saved_badge_text(t) if getattr(self, "session", None) else ""
                     )
+                    sched_badge = self.scheduler.get_schedule_badge(t) if getattr(self, "scheduler", None) else ""
                     time_spent = t.get("time_spent_seconds", 0)
-                    item = TodoItem(t["id"], t["text"], display_text, t["completed"], streak, focused, session_badge=session_badge, time_spent_seconds=time_spent)
+                    item = TodoItem(
+                        t["id"],
+                        t["text"],
+                        display_text,
+                        t["completed"],
+                        streak,
+                        focused,
+                        session_badge=session_badge,
+                        schedule_badge=sched_badge,
+                        time_spent_seconds=time_spent,
+                    )
                     item.add_class("-completed")
                     task_list.append(item)
             
@@ -636,16 +674,50 @@ class EndtimeApp(App):
             if self.editing_id:
                 task_data = self.get_task_by_id(self.editing_id)
                 if task_data:
-                    task_data["text"] = text
+                    clean_text = self.scheduler.extract_and_apply_schedule(task_data, text)
+                    task_data["text"] = clean_text
             else:
-                self.tasks_data.insert(0, {
+                new_task = {
                     "id": str(uuid.uuid4()),
                     "text": text,
-                    "completed": False
-                })
+                    "completed": False,
+                }
+                clean_text = self.scheduler.extract_and_apply_schedule(new_task, text)
+                new_task["text"] = clean_text
+                self.tasks_data.insert(0, new_task)
             self.schedule_save(tasks=True)
             self.refresh_list(keep_index=True)
         self.action_normal_mode()
+
+    def action_schedule_task(self):
+        if self.mode != "NORMAL":
+            return
+        task_list = self.query_one("#task-list", ListView)
+        if task_list.index is not None and task_list.children:
+            item = task_list.children[task_list.index]
+            if isinstance(item, TodoItem):
+                self.schedule_target_id = item.task_id
+                task_dict = self.get_task_by_id(item.task_id)
+                has_schedule = bool(task_dict and task_dict.get("schedule"))
+                _, task_display = parse_task(item.original_text, task_dict)
+                self.push_screen(
+                    ScheduleModal(task_display, is_scheduled=has_schedule),
+                    callback=self._on_schedule_result,
+                )
+
+    def _on_schedule_result(self, result) -> None:
+        if not self.schedule_target_id:
+            return
+
+        if result == "CLEAR":
+            self.scheduler.clear_schedule(self.schedule_target_id)
+            self.update_prompt("[#ff4444]SCHEDULE CLEARED[/]")
+        elif isinstance(result, datetime):
+            self.scheduler.set_schedule(self.schedule_target_id, result)
+            from endtime.schedule import format_schedule_badge
+            self.update_prompt(f"[#ffaa00]SCHEDULED: {format_schedule_badge(result)}[/]")
+
+        self.schedule_target_id = None
 
     def action_work_session(self):
         if self.mode != "NORMAL":
