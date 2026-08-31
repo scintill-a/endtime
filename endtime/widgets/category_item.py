@@ -19,9 +19,11 @@ class CategoryItem(ListItem):
         self.collapsed = collapsed
         self.count = count
         self.completed_count = completed_count
-        self.disabled = False
         self.is_highlighted = False
-        self._label = None
+        self._label = Label(self._format_text(False), classes="category-label", markup=True)
+
+    def compose(self) -> ComposeResult:
+        yield self._label
 
     @property
     def tag(self) -> str:
@@ -48,13 +50,9 @@ class CategoryItem(ListItem):
         divider_color = "#333333" if not is_high else "#555555"
         return f"{prefix}{tag_display}{stats_text} [{divider_color}]" + "─" * 20 + "[/]"
 
-    def compose(self) -> ComposeResult:
-        self._label = Label(self._format_text(self.is_highlighted), classes="category-label", markup=True)
-        yield self._label
-
     def set_highlighted(self, is_high: bool):
         """Update highlighted state and re-render label in place."""
         if self.is_highlighted != is_high:
             self.is_highlighted = is_high
-            if self._label is not None:
+            if getattr(self, "_label", None) is not None and getattr(self._label, "is_mounted", False):
                 self._label.update(self._format_text(is_high))

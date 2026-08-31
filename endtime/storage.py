@@ -1,6 +1,7 @@
 """Persistence and storage management for Endtime."""
 import json
 import uuid
+import shutil
 import functools
 from typing import List, Set, Dict, Any, TYPE_CHECKING
 from endtime.config import TASKS_DIR, TASKS_FILE, CONFIG_FILE
@@ -32,9 +33,19 @@ class StorageManager:
                 pass
         return tasks_data
 
+    def _backup_tasks_if_exists(self) -> None:
+        """Create a safety backup copy of tasks.json if it exists and has content."""
+        if TASKS_FILE.exists() and TASKS_FILE.stat().st_size > 0:
+            try:
+                bak_file = TASKS_FILE.with_suffix(".json.bak")
+                shutil.copy2(TASKS_FILE, bak_file)
+            except Exception:
+                pass
+
     def save_tasks_sync(self, tasks_data: List[Dict[str, Any]]) -> None:
-        """Save tasks directly to disk synchronously."""
+        """Save tasks directly to disk synchronously with backup safety."""
         TASKS_DIR.mkdir(parents=True, exist_ok=True)
+        self._backup_tasks_if_exists()
         try:
             with open(TASKS_FILE, "w") as f:
                 json.dump(tasks_data, f, indent=2)
@@ -87,15 +98,12 @@ class StorageManager:
             self._dirty_tasks = True
         if config:
             self._dirty_config = True
-        try:
-            if self._save_timer is not None:
-                try:
-                    self._save_timer.stop()
-                except Exception:
-                    pass
-            self._save_timer = self.app.set_timer(0.3, self._flush_save)
-        except RuntimeError:
-            self._flush_save(immediate=True)
+        if self._save_timer is not None:
+            try:
+                self._save_timer.stop()
+            except Exception:
+                pass
+        self._save_timer = self.app.set_timer(0.3, self._flush_save)
 
     def _flush_save(self, immediate: bool = False) -> None:
         """Flush dirty states to disk either immediately or via background thread workers."""
@@ -128,6 +136,7 @@ class StorageManager:
 
     def _async_save_tasks(self, data_copy: List[Dict[str, Any]]) -> None:
         TASKS_DIR.mkdir(parents=True, exist_ok=True)
+        self._backup_tasks_if_exists()
         try:
             with open(TASKS_FILE, "w") as f:
                 json.dump(data_copy, f, indent=2)

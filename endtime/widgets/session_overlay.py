@@ -23,7 +23,7 @@ class SessionOverlayModal(ModalScreen[Optional[str]]):
     DEFAULT_CSS = """
     SessionOverlayModal {
         align: center middle;
-        background: rgba(0, 0, 0, 0.85);
+        background: rgba(0, 0, 0, 0.75);
     }
 
     #overlay-card {
@@ -97,7 +97,6 @@ class SessionOverlayModal(ModalScreen[Optional[str]]):
             yield Label("", id="overlay-hints", markup=True)
 
     def on_mount(self) -> None:
-        self.focus()
         self._tick_interval = self.set_interval(0.5, self._on_tick)
         self._on_tick()
 
@@ -167,7 +166,11 @@ class SessionOverlayModal(ModalScreen[Optional[str]]):
             except Exception:
                 pass
             self._tick_interval = None
-        self.dismiss(result)
+        try:
+            if getattr(self.app, "screen", None) is self:
+                self.dismiss(result)
+        except Exception:
+            pass
 
     def _on_tick(self) -> None:
         if hasattr(self.app, "session"):
@@ -214,6 +217,7 @@ class SessionOverlayModal(ModalScreen[Optional[str]]):
                 event.prevent_default()
                 return
             elif key in ("escape", "m") or char in ("m", "M"):
+                # Minimize overlay to background
                 self._safe_dismiss("minimized")
                 event.prevent_default()
                 return
@@ -224,6 +228,7 @@ class SessionOverlayModal(ModalScreen[Optional[str]]):
                 self._on_tick()
             event.prevent_default()
         elif key in ("m", "escape") or char in ("m", "M"):
+            # Minimize to background without stopping/canceling timer
             self._safe_dismiss("minimized")
             event.prevent_default()
         elif key == "s" or char in ("s", "S"):

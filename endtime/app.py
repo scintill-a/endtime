@@ -37,8 +37,9 @@ def format_progress_gauge(completed: int, total: int, width: int = 8) -> str:
     pct = int(round(ratio * 100))
     bar_fill = "█" * filled
     bar_empty = "░" * empty
-    gauge_color = "#ffffff" if ratio == 1.0 else ("#ff4444" if ratio > 0 else "#333333")
-    return f"[{gauge_color}][{bar_fill}[#333333]{bar_empty}[/]][/] {pct}%"
+    if ratio == 1.0:
+        return f"[#ffffff][{bar_fill}][/] 100%"
+    return f"[#ff4444][{bar_fill}[#333333]{bar_empty}[/]][/] [#888888]{pct}%[/]"
 
 
 def copy_to_clipboard_system(app: App, text: str) -> None:
@@ -89,7 +90,6 @@ class EndtimeApp(App):
         Binding("/", "search_mode", "Search", show=False),
         Binding("question_mark", "toggle_help", "Help", show=False),
         Binding("?", "toggle_help", "Help", show=False),
-        Binding("enter", "toggle", "Toggle", show=False),
         Binding("d", "delete_task", "Delete", show=False),
         Binding("e", "edit_task", "Edit", show=False),
         Binding("i", "insert_mode", "Insert", show=False),
@@ -433,19 +433,15 @@ class EndtimeApp(App):
         self.schedule_target_id = None
         self.update_header()
 
-        try:
-            self.query_one("#task-input", Input).display = False
-            lbl = self.query_one("#prompt-label", Label)
-            lbl.display = True
-            lbl.update("AWAITING TASK...")
-        except Exception:
-            pass
+        input_box = self.query_one("#task-input", Input)
+        input_box.value = ""
+        input_box.display = False
+        lbl = self.query_one("#prompt-label", Label)
+        lbl.display = True
+        lbl.update("AWAITING TASK...")
 
         self.refresh_list(keep_index=True)
-        try:
-            self.query_one("#task-list", ListView).focus()
-        except Exception:
-            pass
+        self.query_one("#task-list", ListView).focus()
 
     def action_cursor_down(self):
         if self.mode == "NORMAL":
@@ -661,7 +657,6 @@ class EndtimeApp(App):
         if self.mode == "CONFIRM_DELETE" and self.pending_delete_id:
             self.tasks_data = [t for t in self.tasks_data if t["id"] != self.pending_delete_id]
             self.save_tasks()
-            self.refresh_list(keep_index=True)
             self.show_toast("[#ff4444]✓ TASK DELETED[/]")
             self.action_normal_mode()
         elif self.mode == "CONFIRM_SWEEP":
@@ -671,7 +666,6 @@ class EndtimeApp(App):
                 if not t.get("completed", False) or parse_task(t["text"], t)[0] == "DAILY"
             ]
             self.save_tasks()
-            self.refresh_list(keep_index=True)
             self.show_toast(f"[#ffffff]✓ SWEPT {count} COMPLETED TASKS[/]")
             self.action_normal_mode()
         elif self.mode == "CONFIRM_RESET" and self.pending_reset_id:
@@ -680,7 +674,6 @@ class EndtimeApp(App):
                     t["time_spent_seconds"] = 0
                     break
             self.save_tasks()
-            self.refresh_list(keep_index=True)
             self.show_toast("[#ffffff]✓ TIMER RESET TO 0s[/]")
             self.action_normal_mode()
 
@@ -768,7 +761,6 @@ class EndtimeApp(App):
                 new_task["text"] = clean_text
                 self.tasks_data.insert(0, new_task)
             self.schedule_save(tasks=True)
-            self.refresh_list(keep_index=True)
         self.action_normal_mode()
 
     def action_schedule_task(self):
@@ -786,6 +778,8 @@ class EndtimeApp(App):
                     ScheduleModal(task_display, is_scheduled=has_schedule),
                     callback=self._on_schedule_result,
                 )
+            elif isinstance(item, CategoryItem):
+                self.show_toast("[#888888]SELECT A TASK TO SCHEDULE[/]")
 
     def _on_schedule_result(self, result) -> None:
         if not self.schedule_target_id:

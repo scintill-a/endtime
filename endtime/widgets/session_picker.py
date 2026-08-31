@@ -12,16 +12,16 @@ class SessionPickerModal(ModalScreen[Optional[str]]):
     DEFAULT_CSS = """
     SessionPickerModal {
         align: center middle;
-        background: rgba(0, 0, 0, 0.85);
+        background: rgba(0, 0, 0, 0.75);
     }
 
     #picker-card {
-        width: 44;
-        height: auto;
-        align: center middle;
-        padding: 1 2;
-        border: solid #2a2a2a;
-        background: #090909;
+    width: 44;
+    height: auto;
+    align: center middle;
+    padding: 1 2;
+    border: solid #2a2a2a;
+    background: #090909;
     }
 
     .modal-title {
@@ -40,7 +40,7 @@ class SessionPickerModal(ModalScreen[Optional[str]]):
     }
 
     .modal-option {
-        color: #888888;
+        color: #aaaaaa;
         width: 100%;
         height: 1;
     }
@@ -92,7 +92,6 @@ class SessionPickerModal(ModalScreen[Optional[str]]):
 
     def on_mount(self) -> None:
         self._refresh_options()
-        self.focus()
 
     def _refresh_options(self) -> None:
         for i, (action, label_text) in enumerate(self.options):
@@ -111,6 +110,13 @@ class SessionPickerModal(ModalScreen[Optional[str]]):
             except Exception:
                 pass
 
+    def _safe_dismiss(self, result: Optional[str] = None) -> None:
+        try:
+            if getattr(self.app, "screen", None) is self:
+                self.dismiss(result)
+        except Exception:
+            pass
+
     def on_key(self, event) -> None:
         key = getattr(event, "key", "").lower()
         char = getattr(event, "character", "")
@@ -124,26 +130,26 @@ class SessionPickerModal(ModalScreen[Optional[str]]):
             self._refresh_options()
             event.prevent_default()
         elif key in ("enter", "space"):
-            self.dismiss(self.options[self.selected_index][0])
+            self._safe_dismiss(self.options[self.selected_index][0])
             event.prevent_default()
         elif (key in ("0", "c") or char in ("0", "c", "C")) and self.saved_session:
-            self.dismiss("continue")
+            self._safe_dismiss("continue")
             event.prevent_default()
         elif key == "1" or char == "1":
-            self.dismiss("pomodoro")
+            self._safe_dismiss("pomodoro")
             event.prevent_default()
         elif key == "2" or char == "2":
-            self.dismiss("short_break")
+            self._safe_dismiss("short_break")
             event.prevent_default()
         elif key == "3" or char == "3":
-            self.dismiss("long_break")
+            self._safe_dismiss("long_break")
             event.prevent_default()
         elif key == "4" or char == "4":
-            self.dismiss("stopwatch")
+            self._safe_dismiss("stopwatch")
             event.prevent_default()
         elif (key == "d" or char in ("d", "D")) and self.saved_session:
-            self.dismiss("discard")
+            self._safe_dismiss("discard")
             event.prevent_default()
         elif key in ("escape", "q") or char in ("q", "Q"):
-            self.dismiss(None)
+            self._safe_dismiss(None)
             event.prevent_default()

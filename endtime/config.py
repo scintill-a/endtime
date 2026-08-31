@@ -1,8 +1,14 @@
 """Configuration constants and filesystem paths for Endtime."""
+import os
 import re
 from pathlib import Path
 
-TASKS_DIR = Path.home() / ".config" / "endtime"
+_custom_dir = os.environ.get("ENDTIME_DATA_DIR")
+if _custom_dir:
+    TASKS_DIR = Path(_custom_dir)
+else:
+    TASKS_DIR = Path.home() / ".config" / "endtime"
+
 TASKS_FILE = TASKS_DIR / "tasks.json"
 CONFIG_FILE = TASKS_DIR / "config.json"
 

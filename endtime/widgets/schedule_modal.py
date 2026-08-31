@@ -13,7 +13,7 @@ class ScheduleModal(ModalScreen[Optional[datetime]]):
     DEFAULT_CSS = """
     ScheduleModal {
         align: center middle;
-        background: rgba(0, 0, 0, 0.85);
+        background: rgba(0, 0, 0, 0.75);
     }
 
     #schedule-card {
@@ -41,7 +41,7 @@ class ScheduleModal(ModalScreen[Optional[datetime]]):
     }
 
     .modal-option {
-        color: #888888;
+        color: #aaaaaa;
         width: 100%;
         height: 1;
     }
@@ -93,6 +93,9 @@ class ScheduleModal(ModalScreen[Optional[datetime]]):
             yield Label("\\[1-6] select  \\[j/k] nav  \\[enter] confirm  \\[esc] cancel", classes="modal-hint")
 
     def on_mount(self) -> None:
+        inp = self.query_one("#custom-schedule-input", Input)
+        inp.display = False
+        inp.disabled = True
         self._refresh_options()
         self.focus()
 
@@ -133,14 +136,21 @@ class ScheduleModal(ModalScreen[Optional[datetime]]):
             return "CLEAR"  # Sentinel string for clearing schedule
         return None
 
+    def _safe_dismiss(self, result: Optional[datetime] = None) -> None:
+        try:
+            if getattr(self.app, "screen", None) is self:
+                self.dismiss(result)
+        except Exception:
+            pass
+
     def on_input_submitted(self, event: Input.Submitted) -> None:
         val = event.value.strip()
         if val:
             dt = parse_schedule_string(val)
             if dt:
-                self.dismiss(dt)
+                self._safe_dismiss(dt)
                 return
-        self.dismiss(None)
+        self._safe_dismiss(None)
 
     def on_key(self, event) -> None:
         key = getattr(event, "key", "").lower()
@@ -150,9 +160,10 @@ class ScheduleModal(ModalScreen[Optional[datetime]]):
             if key == "escape":
                 self.custom_mode = False
                 inp = self.query_one("#custom-schedule-input", Input)
+                inp.disabled = True
                 inp.display = False
-                self._refresh_options()
                 self.focus()
+                self._refresh_options()
                 event.prevent_default()
             return
 
@@ -169,37 +180,39 @@ class ScheduleModal(ModalScreen[Optional[datetime]]):
             if action == "custom":
                 self.custom_mode = True
                 inp = self.query_one("#custom-schedule-input", Input)
+                inp.disabled = False
                 inp.display = True
                 inp.value = ""
                 inp.focus()
             else:
-                self.dismiss(self._resolve_selection(action))
+                self._safe_dismiss(self._resolve_selection(action))
             event.prevent_default()
         elif key == "1" or char == "1":
-            self.dismiss(self._resolve_selection("15m"))
+            self._safe_dismiss(self._resolve_selection("15m"))
             event.prevent_default()
         elif key == "2" or char == "2":
-            self.dismiss(self._resolve_selection("30m"))
+            self._safe_dismiss(self._resolve_selection("30m"))
             event.prevent_default()
         elif key == "3" or char == "3":
-            self.dismiss(self._resolve_selection("1h"))
+            self._safe_dismiss(self._resolve_selection("1h"))
             event.prevent_default()
         elif key == "4" or char == "4":
-            self.dismiss(self._resolve_selection("evening"))
+            self._safe_dismiss(self._resolve_selection("evening"))
             event.prevent_default()
         elif key == "5" or char == "5":
-            self.dismiss(self._resolve_selection("tomorrow"))
+            self._safe_dismiss(self._resolve_selection("tomorrow"))
             event.prevent_default()
         elif key == "6" or char == "6":
             self.custom_mode = True
             inp = self.query_one("#custom-schedule-input", Input)
+            inp.disabled = False
             inp.display = True
             inp.value = ""
             inp.focus()
             event.prevent_default()
         elif (key in ("7", "c") or char in ("7", "c", "C")) and self.is_scheduled:
-            self.dismiss("CLEAR")
+            self._safe_dismiss("CLEAR")
             event.prevent_default()
         elif key in ("escape", "q") or char in ("q", "Q"):
-            self.dismiss(None)
+            self._safe_dismiss(None)
             event.prevent_default()

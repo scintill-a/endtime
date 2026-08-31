@@ -31,8 +31,20 @@ class TodoItem(ListItem):
         self.schedule_badge = schedule_badge
         self.time_spent_seconds = time_spent_seconds
         self.is_highlighted = False
-        self._status_label = None
-        self._content_label = None
+        self._status_label = Label(
+            self._get_status_text(False),
+            classes="todo-status",
+            markup=True,
+        )
+        self._content_label = Label(
+            self._get_content_text(),
+            classes="todo-content",
+            markup=True,
+        )
+
+    def compose(self) -> ComposeResult:
+        yield self._status_label
+        yield self._content_label
 
     def _get_status_text(self, is_high: bool) -> str:
         prefix = "[#ff4444]>[/] " if is_high else "  "
@@ -59,25 +71,11 @@ class TodoItem(ListItem):
         )
         return f"{content_text}{streak_text}{sched_text}{badge_text}{time_text}"
 
-    def compose(self) -> ComposeResult:
-        self._status_label = Label(
-            self._get_status_text(self.is_highlighted),
-            classes="todo-status",
-            markup=True,
-        )
-        self._content_label = Label(
-            self._get_content_text(),
-            classes="todo-content",
-            markup=True,
-        )
-        yield self._status_label
-        yield self._content_label
-
     def set_highlighted(self, is_high: bool):
         """Update highlighted state and re-render status label in place."""
         if self.is_highlighted != is_high:
             self.is_highlighted = is_high
-            if self._status_label is not None:
+            if getattr(self, "_status_label", None) is not None and getattr(self._status_label, "is_mounted", False):
                 self._status_label.update(self._get_status_text(is_high))
 
     def update_data_and_refresh(

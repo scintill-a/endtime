@@ -1,4 +1,5 @@
 """Floating reminder popup alert modal for Endtime TUI."""
+from typing import Optional
 from textual.app import ComposeResult
 from textual.screen import ModalScreen
 from textual.widgets import Label, Static
@@ -11,7 +12,7 @@ class ReminderModal(ModalScreen[None]):
     DEFAULT_CSS = """
     ReminderModal {
         align: center middle;
-        background: rgba(0, 0, 0, 0.85);
+        background: rgba(0, 0, 0, 0.8);
     }
 
     #reminder-card {
@@ -40,7 +41,7 @@ class ReminderModal(ModalScreen[None]):
     }
 
     .reminder-status {
-        color: #888888;
+        color: #ff4444;
         width: 100%;
         text-align: center;
         margin-bottom: 1;
@@ -65,18 +66,19 @@ class ReminderModal(ModalScreen[None]):
             yield Label(f"\"{self.task_display[:42]}\"", classes="reminder-task")
             yield Label("SCHEDULED TIME HAS ARRIVED", classes="reminder-status")
             yield Label(
-                "[#ffffff][b]\\[w][/] Start Pomodoro    [#ffffff][b]\\[1][/] Snooze 10m\n"
-                "[#ffffff][b]\\[2][/] Snooze 30m       [#ffffff][b]\\[3][/] Snooze 1h\n"
-                "[#ff4444][b]\\[x][/] Mark Done        [#777777]\\[enter/esc] Dismiss[/]",
+                "[#ffffff][b]\\[w][/] Start Pomodoro    [#ffffff][b]\\[1][/] [#888888]Snooze 10m[/]\n"
+                "[#ffffff][b]\\[2][/] [#888888]Snooze 30m[/]       [#ffffff][b]\\[3][/] [#888888]Snooze 1h[/]\n"
+                "[#ffffff][b]\\[x][/] Mark Done        [#555555]\\[enter/esc] Dismiss[/]",
                 classes="reminder-actions",
                 markup=True,
             )
 
-    def on_mount(self) -> None:
-        self.focus()
-
     def _safe_dismiss(self) -> None:
-        self.dismiss()
+        try:
+            if getattr(self.app, "screen", None) is self:
+                self.dismiss()
+        except Exception:
+            pass
 
     def on_key(self, event) -> None:
         key = getattr(event, "key", "").lower()

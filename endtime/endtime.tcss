@@ -4,6 +4,7 @@ Screen {
     background: #000000;
     color: #888888;
     layout: vertical;
+    overflow: hidden;
     scrollbar-color: #222222;
     scrollbar-color-active: #ff4444;
     scrollbar-color-hover: #ff6666;
@@ -12,25 +13,25 @@ Screen {
 }
 
 ModalScreen, SessionPickerModal, SessionOverlayModal, ScheduleModal, ReminderModal, HelpModal {
-    background: rgba(0, 0, 0, 0.85);
+    background: rgba(0, 0, 0, 0.80);
     align: center middle;
 }
 
 #header {
-    dock: top;
     width: 100%;
     height: auto;
     background: #050505;
     color: #888888;
     padding: 0 1;
     border-bottom: solid #1c1c1c;
-    margin-bottom: 1;
+    margin-bottom: 0;
 }
 
 #task-list {
     background: #000000;
     height: 1fr;
     overflow-x: hidden;
+    overflow-y: auto;
     scrollbar-color: #222222;
     scrollbar-color-active: #ff4444;
     scrollbar-color-hover: #ff6666;
@@ -97,41 +98,34 @@ TodoItem.-completed Label {
 }
 
 #bottom-bar {
-    dock: bottom;
-    height: 1;
-    min-height: 1;
-    max-height: 1;
-    margin-top: 1;
+    height: 3;
     background: #050505;
     border-top: solid #1c1c1c;
     padding: 0 1;
+    layout: horizontal;
+    align-vertical: middle;
 }
 
 #prompt-prefix {
     width: 2;
     color: #ff4444;
-    height: 1;
 }
 
 #prompt-label {
     color: #888888;
-    height: 1;
 }
 
 #task-input {
     background: #050505;
     color: #ffffff;
     border: none;
-    padding: 0;
-    margin: 0;
-    width: 1fr;
+    padding: 0 1;
     height: 1;
+    width: 1fr;
 }
 
 #task-input:focus {
     border: none;
-    background: #050505;
-    color: #ffffff;
 }
 
 #task-input > .input--cursor {
@@ -141,5 +135,5 @@ TodoItem.-completed Label {
 }
 
 #task-input > .input--placeholder {
-    color: #444444;
+    color: #555555;
 }

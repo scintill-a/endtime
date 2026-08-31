@@ -10,7 +10,7 @@ class HelpModal(ModalScreen[None]):
     DEFAULT_CSS = """
     HelpModal {
         align: center middle;
-        background: rgba(0, 0, 0, 0.85);
+        background: rgba(0, 0, 0, 0.75);
     }
 
     #help-card {
@@ -112,12 +112,9 @@ class HelpModal(ModalScreen[None]):
 
             yield Label("\\[H / ? / esc / q] close cheatsheet", classes="help-hint")
 
-    def on_mount(self) -> None:
-        self.focus()
-
     def on_key(self, event) -> None:
         key = getattr(event, "key", "").lower()
         char = getattr(event, "character", "")
-        if key in ("h", "q", "escape", "question_mark") or char in ("H", "h", "q", "Q", "?"):
+        if key in ("escape", "question_mark", "q", "h") or char in ("H", "h", "q", "Q", "?"):
             self.dismiss()
             event.prevent_default()
