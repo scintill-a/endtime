@@ -4,7 +4,7 @@ import uuid
 import shutil
 import functools
 from typing import List, Set, Dict, Any, TYPE_CHECKING
-from endtime.config import TASKS_DIR, TASKS_FILE, CONFIG_FILE
+import endtime.config as config
 
 if TYPE_CHECKING:
     from textual.app import App
@@ -22,9 +22,9 @@ class StorageManager:
     def load_tasks(self) -> List[Dict[str, Any]]:
         """Load tasks from disk synchronously and ensure unique IDs."""
         tasks_data = []
-        if TASKS_FILE.exists():
+        if config.TASKS_FILE.exists():
             try:
-                with open(TASKS_FILE, "r") as f:
+                with open(config.TASKS_FILE, "r") as f:
                     tasks_data = json.load(f)
                     for t in tasks_data:
                         if "id" not in t:
@@ -35,19 +35,19 @@ class StorageManager:
 
     def _backup_tasks_if_exists(self) -> None:
         """Create a safety backup copy of tasks.json if it exists and has content."""
-        if TASKS_FILE.exists() and TASKS_FILE.stat().st_size > 0:
+        if config.TASKS_FILE.exists() and config.TASKS_FILE.stat().st_size > 0:
             try:
-                bak_file = TASKS_FILE.with_suffix(".json.bak")
-                shutil.copy2(TASKS_FILE, bak_file)
+                bak_file = config.TASKS_FILE.with_suffix(".json.bak")
+                shutil.copy2(config.TASKS_FILE, bak_file)
             except Exception:
                 pass
 
     def save_tasks_sync(self, tasks_data: List[Dict[str, Any]]) -> None:
         """Save tasks directly to disk synchronously with backup safety."""
-        TASKS_DIR.mkdir(parents=True, exist_ok=True)
+        config.TASKS_DIR.mkdir(parents=True, exist_ok=True)
         self._backup_tasks_if_exists()
         try:
-            with open(TASKS_FILE, "w") as f:
+            with open(config.TASKS_FILE, "w") as f:
                 json.dump(tasks_data, f, indent=2)
         except Exception:
             pass
@@ -55,9 +55,9 @@ class StorageManager:
     def load_collapsed_tags(self) -> Set[str]:
         """Load set of collapsed category tag names from config file."""
         collapsed_tags = set()
-        if CONFIG_FILE.exists():
+        if config.CONFIG_FILE.exists():
             try:
-                with open(CONFIG_FILE, "r") as f:
+                with open(config.CONFIG_FILE, "r") as f:
                     data = json.load(f)
                     collapsed_tags = set(data.get("collapsed_tags", []))
             except Exception:
@@ -67,9 +67,9 @@ class StorageManager:
     def load_tag_order(self) -> List[str]:
         """Load list of ordered category tag names from config file."""
         tag_order = []
-        if CONFIG_FILE.exists():
+        if config.CONFIG_FILE.exists():
             try:
-                with open(CONFIG_FILE, "r") as f:
+                with open(config.CONFIG_FILE, "r") as f:
                     data = json.load(f)
                     tag_order = list(data.get("tag_order", []))
             except Exception:
@@ -78,16 +78,16 @@ class StorageManager:
 
     def save_collapsed_tags_sync(self, collapsed_tags: Set[str], tag_order: List[str] = None) -> None:
         """Save collapsed category tags and tag order directly to config file synchronously."""
-        TASKS_DIR.mkdir(parents=True, exist_ok=True)
+        config.TASKS_DIR.mkdir(parents=True, exist_ok=True)
         try:
             config_data = {}
-            if CONFIG_FILE.exists():
-                with open(CONFIG_FILE, "r") as f:
+            if config.CONFIG_FILE.exists():
+                with open(config.CONFIG_FILE, "r") as f:
                     config_data = json.load(f)
             config_data["collapsed_tags"] = list(collapsed_tags)
             if tag_order is not None:
                 config_data["tag_order"] = list(tag_order)
-            with open(CONFIG_FILE, "w") as f:
+            with open(config.CONFIG_FILE, "w") as f:
                 json.dump(config_data, f, indent=2)
         except Exception:
             pass
@@ -135,25 +135,25 @@ class StorageManager:
                 self.app.run_worker(functools.partial(self._async_save_config, tags_copy, order_copy), thread=True)
 
     def _async_save_tasks(self, data_copy: List[Dict[str, Any]]) -> None:
-        TASKS_DIR.mkdir(parents=True, exist_ok=True)
+        config.TASKS_DIR.mkdir(parents=True, exist_ok=True)
         self._backup_tasks_if_exists()
         try:
-            with open(TASKS_FILE, "w") as f:
+            with open(config.TASKS_FILE, "w") as f:
                 json.dump(data_copy, f, indent=2)
         except Exception:
             pass
 
     def _async_save_config(self, tags_copy: List[str], order_copy: List[str] = None) -> None:
-        TASKS_DIR.mkdir(parents=True, exist_ok=True)
+        config.TASKS_DIR.mkdir(parents=True, exist_ok=True)
         try:
             config_data = {}
-            if CONFIG_FILE.exists():
-                with open(CONFIG_FILE, "r") as f:
+            if config.CONFIG_FILE.exists():
+                with open(config.CONFIG_FILE, "r") as f:
                     config_data = json.load(f)
             config_data["collapsed_tags"] = tags_copy
             if order_copy is not None:
                 config_data["tag_order"] = order_copy
-            with open(CONFIG_FILE, "w") as f:
+            with open(config.CONFIG_FILE, "w") as f:
                 json.dump(config_data, f, indent=2)
         except Exception:
             pass

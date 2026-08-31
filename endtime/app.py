@@ -275,20 +275,26 @@ class EndtimeApp(App):
 
         self.previous_highlighted = None
 
-        pending = [t for t in self.tasks_data if not t.get("completed", False)]
-        completed = [t for t in self.tasks_data if t.get("completed", False)]
-        completed.sort(
-            key=lambda t: (parse_task(t["text"], t)[0] == "DAILY", t.get("completed_at", "")),
+        pending_and_daily = [
+            t for t in self.tasks_data
+            if not t.get("completed", False) or parse_task(t["text"], t)[0] == "DAILY"
+        ]
+        completed_non_daily = [
+            t for t in self.tasks_data
+            if t.get("completed", False) and parse_task(t["text"], t)[0] != "DAILY"
+        ]
+        completed_non_daily.sort(
+            key=lambda t: t.get("completed_at", ""),
             reverse=True,
         )
 
         # Filter by search query if in search mode
         if self.search_query:
-            pending = [t for t in pending if self.search_query in t.get("text", "").lower()]
-            completed = [t for t in completed if self.search_query in t.get("text", "").lower()]
+            pending_and_daily = [t for t in pending_and_daily if self.search_query in t.get("text", "").lower()]
+            completed_non_daily = [t for t in completed_non_daily if self.search_query in t.get("text", "").lower()]
 
         groups = {}
-        for t in pending:
+        for t in pending_and_daily:
             tag, display_text = parse_task(t["text"], t)
             if tag not in groups:
                 groups[tag] = []
@@ -317,47 +323,20 @@ class EndtimeApp(App):
 
         for tag in sorted_tags:
             is_col = (tag in self.collapsed_tags)
-            group_pending = groups[tag]
-            count = len(group_pending)
+            group_tasks = groups[tag]
+            count = len(group_tasks)
             completed_in_tag = sum(
+                1 for t, _ in group_tasks
+                if t.get("completed", False)
+            ) if tag == "DAILY" else sum(
                 1 for t in self.tasks_data
                 if t.get("completed", False) and parse_task(t["text"], t)[0] == tag
             )
-            total_in_tag = count + completed_in_tag
+            total_in_tag = count if tag == "DAILY" else (count + completed_in_tag)
             items_to_add.append(CategoryItem(tag, collapsed=is_col, count=total_in_tag, completed_count=completed_in_tag))
 
             if not is_col:
-                for t, display_text in group_pending:
-                    streak = t.get("streak", 0) if tag == "DAILY" else 0
-                    focused = t.get("focused", False)
-                    session_badge = (
-                        self.session.get_badge_text()
-                        if getattr(self, "session", None) and self.session.active_task_id == t["id"]
-                        else self.session.get_saved_badge_text(t) if getattr(self, "session", None) else ""
-                    )
-                    sched_badge = self.scheduler.get_schedule_badge(t) if getattr(self, "scheduler", None) else ""
-                    time_spent = t.get("time_spent_seconds", 0)
-                    items_to_add.append(
-                        TodoItem(
-                            t["id"],
-                            t["text"],
-                            display_text,
-                            t["completed"],
-                            streak,
-                            focused,
-                            session_badge=session_badge,
-                            schedule_badge=sched_badge,
-                            time_spent_seconds=time_spent,
-                        )
-                    )
-
-        if completed:
-            is_col = ("CLEARED" in self.collapsed_tags)
-            count = len(completed)
-            items_to_add.append(CategoryItem("CLEARED", collapsed=is_col, count=count, completed_count=count))
-            if not is_col:
-                for t in completed:
-                    tag, display_text = parse_task(t["text"], t)
+                for t, display_text in group_tasks:
                     streak = t.get("streak", 0) if tag == "DAILY" else 0
                     focused = t.get("focused", False)
                     session_badge = (
@@ -371,7 +350,38 @@ class EndtimeApp(App):
                         t["id"],
                         t["text"],
                         display_text,
-                        t["completed"],
+                        t.get("completed", False),
+                        streak,
+                        focused,
+                        session_badge=session_badge,
+                        schedule_badge=sched_badge,
+                        time_spent_seconds=time_spent,
+                    )
+                    if t.get("completed", False):
+                        item.add_class("-completed")
+                    items_to_add.append(item)
+
+        if completed_non_daily:
+            is_col = ("CLEARED" in self.collapsed_tags)
+            count = len(completed_non_daily)
+            items_to_add.append(CategoryItem("CLEARED", collapsed=is_col, count=count, completed_count=count))
+            if not is_col:
+                for t in completed_non_daily:
+                    tag, display_text = parse_task(t["text"], t)
+                    streak = 0
+                    focused = t.get("focused", False)
+                    session_badge = (
+                        self.session.get_badge_text()
+                        if getattr(self, "session", None) and self.session.active_task_id == t["id"]
+                        else self.session.get_saved_badge_text(t) if getattr(self, "session", None) else ""
+                    )
+                    sched_badge = self.scheduler.get_schedule_badge(t) if getattr(self, "scheduler", None) else ""
+                    time_spent = t.get("time_spent_seconds", 0)
+                    item = TodoItem(
+                        t["id"],
+                        t["text"],
+                        display_text,
+                        t.get("completed", False),
                         streak,
                         focused,
                         session_badge=session_badge,
@@ -489,7 +499,10 @@ class EndtimeApp(App):
         while 0 <= curr < len(self.tasks_data):
             other = self.tasks_data[curr]
             other_tag, _ = parse_task(other["text"], other)
-            if other.get("completed", False) == is_completed and other_tag == task_tag:
+            if task_tag == "DAILY" and other_tag == "DAILY":
+                target_idx = curr
+                break
+            elif task_tag != "DAILY" and other.get("completed", False) == is_completed and other_tag == task_tag:
                 target_idx = curr
                 break
             curr += step
@@ -592,6 +605,8 @@ class EndtimeApp(App):
                             elif not task_data["completed"] and today_str in completed_dates:
                                 completed_dates.remove(today_str)
                             task_data["completed_dates"] = completed_dates
+                            task_data["last_habit_date"] = today_str
+                            process_habits(self.tasks_data)
 
                         self.schedule_save(tasks=True)
                         self.refresh_list(keep_index=True)
@@ -607,10 +622,13 @@ class EndtimeApp(App):
                 if isinstance(item, CategoryItem):
                     tag_to_toggle = item.text
                 elif isinstance(item, TodoItem):
-                    if item.completed:
+                    task_tag, _ = parse_task(item.original_text)
+                    if task_tag == "DAILY":
+                        tag_to_toggle = "DAILY"
+                    elif item.completed:
                         tag_to_toggle = "CLEARED"
                     else:
-                        tag_to_toggle, _ = parse_task(item.original_text)
+                        tag_to_toggle = task_tag
 
                 if tag_to_toggle:
                     if tag_to_toggle in self.collapsed_tags:
@@ -667,7 +685,10 @@ class EndtimeApp(App):
 
     def action_sweep_cleared(self):
         if self.mode == "NORMAL":
-            completed = [t for t in self.tasks_data if t.get("completed", False)]
+            completed = [
+                t for t in self.tasks_data
+                if t.get("completed", False) and parse_task(t["text"], t)[0] != "DAILY"
+            ]
             if not completed:
                 return
             self.mode = "CONFIRM_SWEEP"
@@ -731,7 +752,15 @@ class EndtimeApp(App):
                 elif isinstance(item, CategoryItem):
                     tag_name = item.tag
                     if tag_name == "CLEARED":
-                        matching = [t["text"] for t in self.tasks_data if t.get("completed", False)]
+                        matching = [
+                            t["text"] for t in self.tasks_data
+                            if t.get("completed", False) and parse_task(t["text"], t)[0] != "DAILY"
+                        ]
+                    elif tag_name == "DAILY":
+                        matching = [
+                            t["text"] for t in self.tasks_data
+                            if parse_task(t["text"], t)[0] == "DAILY"
+                        ]
                     else:
                         matching = [
                             t["text"] for t in self.tasks_data

@@ -143,5 +143,27 @@ class TestSchedule(unittest.TestCase):
         self.assertIsNone(task2["schedule"])
 
 
+    def test_live_badge_update_on_tick(self):
+        from unittest.mock import MagicMock
+        from endtime.widgets.todo_item import TodoItem
+        app = DummyApp()
+        sm = ScheduleManager(app)
+
+        item = TodoItem(
+            task_id="task-2",
+            original_text="[DAILY] Review emails",
+            display_text="Review emails",
+            schedule_badge="old_badge",
+        )
+
+        mock_list = MagicMock()
+        mock_list.children = [item]
+        app.query_one = MagicMock(return_value=mock_list)
+
+        sm.tick()
+        # item schedule_badge should have been updated from 'old_badge' to real live badge
+        self.assertNotEqual(item.schedule_badge, "old_badge")
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -190,6 +190,7 @@ class SessionManager:
 
                 tag, _ = parse_task(task_dict["text"], task_dict)
                 if tag == "DAILY":
+                    from endtime.habits import process_habits
                     today_str = date.today().isoformat()
                     completed_dates = task_dict.get("completed_dates", [])
                     if task_dict["completed"] and today_str not in completed_dates:
@@ -197,6 +198,9 @@ class SessionManager:
                     elif not task_dict["completed"] and today_str in completed_dates:
                         completed_dates.remove(today_str)
                     task_dict["completed_dates"] = completed_dates
+                    task_dict["last_habit_date"] = today_str
+                    if hasattr(self.app, "tasks_data"):
+                        process_habits(self.app.tasks_data)
 
                 if hasattr(self.app, "schedule_save"):
                     self.app.schedule_save(tasks=True)

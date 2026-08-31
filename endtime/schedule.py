@@ -184,6 +184,7 @@ class ScheduleManager:
     def __init__(self, app: "App"):
         self.app = app
         self._ticker_interval = None
+        self._last_date = date.today()
 
     def start_ticker(self) -> None:
         """Start the 1-second interval scheduler ticker."""
@@ -200,9 +201,20 @@ class ScheduleManager:
             self._ticker_interval = None
 
     def tick(self) -> None:
-        """Check all tasks for triggered schedule reminders."""
+        """Check all tasks for triggered schedule reminders, update live badges, and handle day rollover."""
         now = datetime.now()
+        today = now.date()
         tasks_data = getattr(self.app, "tasks_data", [])
+
+        if today != self._last_date:
+            self._last_date = today
+            from endtime.habits import process_habits
+            if process_habits(tasks_data):
+                if hasattr(self.app, "schedule_save"):
+                    self.app.schedule_save(tasks=True)
+                if hasattr(self.app, "refresh_list"):
+                    self.app.refresh_list(keep_index=True)
+
         save_needed = False
 
         for task in tasks_data:
@@ -229,6 +241,38 @@ class ScheduleManager:
 
         if save_needed and hasattr(self.app, "schedule_save"):
             self.app.schedule_save(tasks=True)
+
+        self._refresh_live_badges()
+        if hasattr(self.app, "update_header"):
+            self.app.update_header()
+
+    def _refresh_live_badges(self) -> None:
+        """Update schedule badges in place for all visible TodoItems in the list view."""
+        from textual.widgets import ListView
+        from endtime.widgets.todo_item import TodoItem
+
+        try:
+            task_list = None
+            try:
+                task_list = self.app.query_one("#task-list", ListView)
+            except Exception:
+                for screen in reversed(getattr(self.app, "_screen_stack", [])):
+                    try:
+                        task_list = screen.query_one("#task-list", ListView)
+                        break
+                    except Exception:
+                        continue
+            if task_list is None:
+                return
+
+            for child in task_list.children:
+                if isinstance(child, TodoItem):
+                    task_dict = self.app.get_task_by_id(child.task_id) if hasattr(self.app, "get_task_by_id") else None
+                    new_badge = self.get_schedule_badge(task_dict)
+                    if child.schedule_badge != new_badge:
+                        child.update_data_and_refresh(schedule_badge=new_badge)
+        except Exception:
+            pass
 
     def is_task_overdue(self, task_dict: Optional[Dict[str, Any]], now: Optional[datetime] = None) -> bool:
         """Return True if task has an active, uncompleted schedule whose time has passed."""

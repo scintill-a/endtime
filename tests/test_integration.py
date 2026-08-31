@@ -20,12 +20,19 @@ import json
 
 class TestEndtimeIntegration(unittest.TestCase):
     def setUp(self):
+        import endtime.config as config
         self.temp_dir = tempfile.TemporaryDirectory()
         self.old_env = os.environ.get("ENDTIME_DATA_DIR")
         os.environ["ENDTIME_DATA_DIR"] = self.temp_dir.name
+        self.orig_tasks_dir = config.TASKS_DIR
+        self.orig_tasks_file = config.TASKS_FILE
+        self.orig_config_file = config.CONFIG_FILE
+        config.TASKS_DIR = Path(self.temp_dir.name)
+        config.TASKS_FILE = config.TASKS_DIR / "tasks.json"
+        config.CONFIG_FILE = config.TASKS_DIR / "config.json"
         
         # Write initial tasks so on_mount loads them into task_list
-        tasks_file = Path(self.temp_dir.name) / "tasks.json"
+        tasks_file = config.TASKS_FILE
         initial_tasks = [
             {"id": "t-1", "text": "[WORK] Complete annual report", "completed": False, "focused": True},
             {"id": "t-2", "text": "[DAILY] Read 20 pages", "completed": False, "streak": 3},
@@ -35,6 +42,10 @@ class TestEndtimeIntegration(unittest.TestCase):
             json.dump(initial_tasks, f)
 
     def tearDown(self):
+        import endtime.config as config
+        config.TASKS_DIR = self.orig_tasks_dir
+        config.TASKS_FILE = self.orig_tasks_file
+        config.CONFIG_FILE = self.orig_config_file
         if self.old_env is not None:
             os.environ["ENDTIME_DATA_DIR"] = self.old_env
         else:
@@ -308,6 +319,49 @@ class TestEndtimeIntegration(unittest.TestCase):
                     )
 
 
+    def test_daily_task_stays_in_daily_when_completed(self):
+        """Verify completed DAILY tasks stay under DAILY category and not under CLEARED."""
+        async def run():
+            app = EndtimeApp()
+            async with app.run_test(headless=True) as pilot:
+                task_list = pilot.app.query_one("#task-list", ListView)
+                # Find the daily task item
+                daily_idx = None
+                for idx, child in enumerate(task_list.children):
+                    if isinstance(child, TodoItem) and "[DAILY]" in child.original_text:
+                        daily_idx = idx
+                        break
+                self.assertIsNotNone(daily_idx)
+                task_list.index = daily_idx
+
+                # Toggle daily task completed
+                await pilot.press("space")
+                await pilot.pause()
+
+                daily_task = pilot.app.get_task_by_id("t-2")
+                self.assertTrue(daily_task["completed"])
+
+                # Check task_list children: t-2 should still be directly after DAILY category header
+                daily_cat_idx = next(
+                    i for i, c in enumerate(task_list.children)
+                    if isinstance(c, CategoryItem) and c.tag == "DAILY"
+                )
+                self.assertIsInstance(task_list.children[daily_cat_idx + 1], TodoItem)
+                self.assertEqual(task_list.children[daily_cat_idx + 1].task_id, "t-2")
+
+                # Verify CLEARED category does not contain t-2
+                cleared_items = [
+                    c for c in task_list.children
+                    if isinstance(c, TodoItem) and c.completed and "[DAILY]" not in c.original_text
+                ]
+                self.assertNotIn("t-2", [c.task_id for c in cleared_items])
+
+                await pilot.exit(None)
+
+        asyncio.run(run())
+
+
 if __name__ == "__main__":
     unittest.main()
+
 
