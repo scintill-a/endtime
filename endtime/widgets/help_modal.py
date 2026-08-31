@@ -1,5 +1,6 @@
 """Help and keybindings cheatsheet modal for Endtime TUI."""
 from textual.app import ComposeResult
+from textual.binding import Binding
 from textual.screen import ModalScreen
 from textual.widgets import Label, Static
 
@@ -7,10 +8,21 @@ from textual.widgets import Label, Static
 class HelpModal(ModalScreen[None]):
     """Fullscreen minimal modal overlay displaying all keybindings categorized."""
 
+    can_focus = True
+
+    BINDINGS = [
+        Binding("escape", "dismiss_modal", "Close", show=False),
+        Binding("q", "dismiss_modal", "Close", show=False),
+        Binding("h", "dismiss_modal", "Close", show=False),
+        Binding("H", "dismiss_modal", "Close", show=False),
+        Binding("question_mark", "dismiss_modal", "Close", show=False),
+        Binding("?", "dismiss_modal", "Close", show=False),
+    ]
+
     DEFAULT_CSS = """
     HelpModal {
         align: center middle;
-        background: rgba(0, 0, 0, 0.75);
+        background: rgba(0, 0, 0, 0.85);
     }
 
     #help-card {
@@ -18,7 +30,7 @@ class HelpModal(ModalScreen[None]):
         height: auto;
         align: center middle;
         padding: 1 2;
-        border: solid #2a2a2a;
+        border: solid #333333;
         background: #090909;
     }
 
@@ -31,7 +43,7 @@ class HelpModal(ModalScreen[None]):
     }
 
     .help-section-title {
-        color: #00e5ff;
+        color: #ffffff;
         text-style: bold;
         width: 100%;
         margin-top: 1;
@@ -45,7 +57,7 @@ class HelpModal(ModalScreen[None]):
     }
 
     .help-key {
-        color: #ffffff;
+        color: #ff4444;
         text-style: bold;
         width: 14;
         text-align: right;
@@ -112,7 +124,11 @@ class HelpModal(ModalScreen[None]):
 
             yield Label("\\[H / ? / esc / q] close cheatsheet", classes="help-hint")
 
-    def on_key(self, event) -> None:
-        if event.character in ("H", "h", "q", "?") or event.key == "escape":
+    def on_mount(self) -> None:
+        self.focus()
+
+    def action_dismiss_modal(self) -> None:
+        try:
             self.dismiss()
-            event.prevent_default()
+        except Exception:
+            pass

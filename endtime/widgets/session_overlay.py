@@ -121,7 +121,7 @@ class SessionOverlayModal(ModalScreen[Optional[str]]):
             if i < cycle_idx:
                 pills.append("[#ff4444]●[/]")
             elif i == cycle_idx:
-                pills.append("[#00e5ff]●[/]" if self.app.session.is_break else "[#ffffff][b]●[/b][/]")
+                pills.append("[#ff4444]●[/]" if self.app.session.is_break else "[#ffffff][b]●[/b][/]")
             else:
                 pills.append("[#333333]○[/]")
         return "Cycles: " + " ".join(pills)
@@ -133,7 +133,7 @@ class SessionOverlayModal(ModalScreen[Optional[str]]):
                     is_long = getattr(self.app.session, "pomodoro_round", 1) % 4 == 0
                     break_len = "15m long" if is_long else "5m"
                     self.query_one("#overlay-hints", Label).update(
-                        f"[#00e5ff][b]\\[enter/n] start {break_len} break[/][/]\n[#777777]\\[s] save & exit   \\[m/esc] minimize[/]"
+                        f"[#ffffff][b]\\[enter/n] start {break_len} break[/][/]\n[#777777]\\[s] save & exit   \\[m/esc] minimize[/]"
                     )
                     return
                 elif self.app.session.state == SessionState.WAITING_WORK:

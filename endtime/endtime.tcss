@@ -1,4 +1,4 @@
-/* Endtime - Cyberpunk Minimalist HUD Stylesheet */
+/* Endtime - Minimalist Terminal HUD Stylesheet (Red / White / Gray / Black) */
 
 Screen {
     background: #000000;
@@ -12,7 +12,7 @@ Screen {
 }
 
 ModalScreen, SessionPickerModal, SessionOverlayModal, ScheduleModal, ReminderModal, HelpModal {
-    background: rgba(0, 0, 0, 0.80);
+    background: rgba(0, 0, 0, 0.85);
     align: center middle;
 }
 
@@ -92,25 +92,26 @@ TodoItem.--highlight {
 }
 
 TodoItem.-completed Label {
-    color: #383838;
+    color: #444444;
     text-style: strike;
 }
 
 #bottom-bar {
     dock: bottom;
     height: 1;
-    margin-top: 1;
     background: #050505;
-    border-top: solid #1c1c1c;
     padding: 0 1;
+    margin: 0;
 }
 
 #prompt-prefix {
     width: 2;
+    height: 1;
     color: #ff4444;
 }
 
 #prompt-label {
+    height: 1;
     color: #888888;
 }
 
@@ -119,6 +120,8 @@ TodoItem.-completed Label {
     color: #ffffff;
     border: none;
     padding: 0;
+    margin: 0;
+    height: 1;
     width: 1fr;
 }
 
@@ -128,4 +131,9 @@ TodoItem.-completed Label {
 
 #task-input > .input--placeholder {
     color: #444444;
+}
+
+#task-input > .input--cursor {
+    background: #ff4444;
+    color: #000000;
 }

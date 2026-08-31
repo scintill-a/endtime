@@ -34,10 +34,10 @@ def format_progress_gauge(completed: int, total: int, width: int = 8) -> str:
     ratio = max(0.0, min(1.0, completed / total))
     filled = int(round(ratio * width))
     empty = width - filled
-    pct = int(round(ratio * 100))
     bar_fill = "█" * filled
     bar_empty = "░" * empty
-    gauge_color = "#00e5ff" if ratio == 1.0 else ("#ffaa00" if ratio >= 0.5 else "#ff4444")
+    pct = int(round(ratio * 100))
+    gauge_color = "#ffffff" if ratio == 1.0 else ("#ff4444" if ratio > 0 else "#333333")
     return f"[{gauge_color}][{bar_fill}[#333333]{bar_empty}[/]][/] {pct}%"
 
 
@@ -176,7 +176,7 @@ class EndtimeApp(App):
         total = len(self.tasks_data)
         completed_count = sum(1 for t in self.tasks_data if t.get("completed", False))
 
-        mode_color = "#ff4444" if self.mode == "NORMAL" else ("#00e5ff" if self.mode == "SEARCH" else "#ffffff")
+        mode_color = "#ff4444" if self.mode == "NORMAL" else "#ffffff"
         mode_display = self.mode
         if self.mode == "INSERT" and self.editing_id:
             mode_display = "EDIT"
@@ -666,7 +666,7 @@ class EndtimeApp(App):
             ]
             self.save_tasks()
             self.refresh_list(keep_index=True)
-            self.show_toast(f"[#00e5ff]✓ SWEPT {count} COMPLETED TASKS[/]")
+            self.show_toast(f"[#ffffff]✓ SWEPT {count} COMPLETED TASKS[/]")
             self.action_normal_mode()
         elif self.mode == "CONFIRM_RESET" and self.pending_reset_id:
             for t in self.tasks_data:
@@ -675,7 +675,7 @@ class EndtimeApp(App):
                     break
             self.save_tasks()
             self.refresh_list(keep_index=True)
-            self.show_toast("[#ffaa00]✓ TIMER RESET TO 0s[/]")
+            self.show_toast("[#888888]✓ TIMER RESET TO 0s[/]")
             self.action_normal_mode()
 
     def action_yank(self):
@@ -692,7 +692,7 @@ class EndtimeApp(App):
                     task_data = self.get_task_by_id(item.task_id)
                     if task_data:
                         text_to_copy = task_data["text"]
-                        msg = "[#00e5ff]✓ COPIED TASK TO CLIPBOARD[/]"
+                        msg = "[#ffffff]✓ COPIED TASK TO CLIPBOARD[/]"
                 elif isinstance(item, CategoryItem):
                     tag_name = item.tag
                     if tag_name == "CLEARED":
@@ -705,9 +705,9 @@ class EndtimeApp(App):
                     if matching:
                         text_to_copy = "\n".join(matching)
                         count_label = f"{len(matching)} TASK{'S' if len(matching)>1 else ''}"
-                        msg = f"[#00e5ff]✓ COPIED {count_label} ({tag_name}) TO CLIPBOARD[/]"
+                        msg = f"[#ffffff]✓ COPIED {count_label} ({tag_name}) TO CLIPBOARD[/]"
                     else:
-                        msg = f"[#ffaa00]NO TASKS IN {tag_name} TO COPY[/]"
+                        msg = f"[#888888]NO TASKS IN {tag_name} TO COPY[/]"
 
                 if text_to_copy:
                     copy_to_clipboard_system(self, text_to_copy)
@@ -791,7 +791,7 @@ class EndtimeApp(App):
         elif isinstance(result, datetime):
             self.scheduler.set_schedule(self.schedule_target_id, result)
             badge = format_schedule_badge(result)
-            self.show_toast(f"[#ffaa00]✓ SCHEDULED: {badge}[/]")
+            self.show_toast(f"[#ffffff]✓ SCHEDULED: {badge}[/]")
 
         self.schedule_target_id = None
 
