@@ -2,6 +2,8 @@
 
 A minimalist, keyboard-driven Task Manager and Productivity HUD for the terminal. Built with Python and [Textual](https://textual.textualize.io/).
 
+![Endtime HUD Screenshot](assets/mockup.svg)
+
 ## Features
 
 - **Persistent Focus Sessions & Continue**: Start Pomodoro (25m), Short Breaks (5m), Long Breaks (15m), or Stopwatches attached to tasks. Pausing or exiting persists a snapshot, allowing you to seamlessly **continue where you left off** with remaining time and cycle counters intact.

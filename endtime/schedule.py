@@ -130,27 +130,27 @@ def format_schedule_badge(scheduled_dt: datetime, now: Optional[datetime] = None
         # Overdue
         abs_diff = int(abs(diff))
         if abs_diff < 3600:
-            return f"[#ff4444][b]⏰ [OVERDUE] ({abs_diff // 60}m)[/b][/]"
+            return f"[#ff4444][b]◷ [OVERDUE] ({abs_diff // 60}m)[/b][/]"
         elif abs_diff < 86400:
-            return f"[#ff4444][b]⏰ [OVERDUE] ({abs_diff // 3600}h)[/b][/]"
+            return f"[#ff4444][b]◷ [OVERDUE] ({abs_diff // 3600}h)[/b][/]"
         else:
-            return f"[#ff4444][b]⏰ [OVERDUE] ({scheduled_dt.strftime('%b %d')})[/b][/]"
+            return f"[#ff4444][b]◷ [OVERDUE] ({scheduled_dt.strftime('%b %d')})[/b][/]"
     elif diff < 0:
-        return "[#ff4444][b]⏰ [DUE NOW][/b][/]"
+        return "[#ff4444][b]◷ [DUE NOW][/b][/]"
     elif diff < 60:
-        return "[#ff4444][b]⏰ in <1m[/b][/]"
+        return "[#ff4444][b]◷ in <1m[/b][/]"
     elif diff < 3600:
         mins = int(diff // 60)
-        return f"[#666666]⏰[/] [#888888]in {mins}m[/]"
+        return f"[#666666]◷[/] [#888888]in {mins}m[/]"
     elif scheduled_dt.date() == now.date():
         time_str = scheduled_dt.strftime("%H:%M")
         hours = int(diff // 3600)
-        return f"[#666666]⏰[/] [#888888]{time_str} (in {hours}h)[/]"
+        return f"[#666666]◷[/] [#888888]{time_str} (in {hours}h)[/]"
     elif scheduled_dt.date() == (now + timedelta(days=1)).date():
         time_str = scheduled_dt.strftime("%H:%M")
-        return f"[#555555]⏰ tmrw {time_str}[/]"
+        return f"[#555555]◷ tmrw {time_str}[/]"
     else:
-        return f"[#555555]⏰ {scheduled_dt.strftime('%b %d %H:%M')}[/]"
+        return f"[#555555]◷ {scheduled_dt.strftime('%b %d %H:%M')}[/]"
 
 
 def send_desktop_notification(title: str, message: str) -> None:
